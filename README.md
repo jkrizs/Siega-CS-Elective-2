@@ -1,6 +1,6 @@
 # my_first_flutter_ui
 
-A new Flutter project.
+flutter first activity.
 
 ## Getting Started
 
