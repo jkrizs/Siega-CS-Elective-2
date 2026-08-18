@@ -5,7 +5,6 @@ void main() {
   runApp(const MyApp());
 }
 
-// 1. Configure the Router with a nested sub-route
 final GoRouter _router = GoRouter(
   initialLocation: '/',
   routes: [
@@ -42,7 +41,6 @@ class MyApp extends StatelessWidget {
   }
 }
 
-// 2. Home Page: List of Fruits
 class FruitListScreen extends StatelessWidget {
   const FruitListScreen({super.key});
 
@@ -123,13 +121,11 @@ class FruitListScreen extends StatelessWidget {
   }
 }
 
-// 3. Detail Page: Shows the Fruit Illustration
 class FruitDetailScreen extends StatelessWidget {
   final String fruitName;
 
   const FruitDetailScreen({super.key, required this.fruitName});
 
-  // Map to find the matching illustration/emoji
   static const Map<String, String> fruitIllustrations = {
     'Apple': '🍎',
     'Banana': '🍌',
