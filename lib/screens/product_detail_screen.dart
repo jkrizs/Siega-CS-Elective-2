@@ -25,6 +25,10 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
   }
 
   void _handleAddToCart() {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final snackBarBg = isDark ? const Color(0xFF222222) : AppColors.primary;
+    final accentColor = isDark ? AppColors.primaryLight : Colors.white;
+
     final selectedColor = widget.product.colors.isNotEmpty
         ? widget.product.colors[_selectedColorIndex]
         : ProductColorOption(
@@ -41,20 +45,22 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
       SnackBar(
         behavior: SnackBarBehavior.floating,
         duration: const Duration(seconds: 2),
-        backgroundColor: const Color(0xFF1E293B),
+        backgroundColor: snackBarBg,
         elevation: 6,
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(12),
-          side: BorderSide(
-            color: Colors.white.withValues(alpha: 0.1),
-            width: 1,
-          ),
+          side: isDark
+              ? BorderSide(
+                  color: AppColors.primaryLight.withValues(alpha: 0.35),
+                  width: 1,
+                )
+              : BorderSide.none,
         ),
         content: Row(
           children: [
-            const Icon(
+            Icon(
               Icons.check_circle_rounded,
-              color: Color(0xFF34D399),
+              color: accentColor,
               size: 20,
             ),
             const SizedBox(width: 10),
@@ -72,7 +78,7 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
         ),
         action: SnackBarAction(
           label: 'VIEW CART',
-          textColor: const Color(0xFF38BDF8),
+          textColor: accentColor,
           onPressed: () {
             ScaffoldMessenger.of(context).hideCurrentSnackBar();
             context.go('/cart');
