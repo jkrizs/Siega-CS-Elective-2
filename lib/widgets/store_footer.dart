@@ -41,67 +41,38 @@ class StoreFooter extends StatelessWidget {
             runSpacing: 4,
             alignment: WrapAlignment.center,
             children: [
-              _FooterLink(
-                label: 'Warranty',
-                onTap: () => _showQuickInfo(context, 'Lifetime Warranty on all bottles.'),
+              Text(
+                'Warranty',
+                style: theme.textTheme.bodySmall?.copyWith(
+                  fontWeight: FontWeight.w600,
+                  color: theme.colorScheme.primary,
+                ),
               ),
-              _FooterLink(
-                label: 'Shipping & Returns',
-                onTap: () => _showQuickInfo(context, 'Free shipping on orders over \$30.'),
+              Text(
+                'Shipping & Returns',
+                style: theme.textTheme.bodySmall?.copyWith(
+                  fontWeight: FontWeight.w600,
+                  color: theme.colorScheme.primary,
+                ),
               ),
-              _FooterLink(
-                label: 'Our Story',
-                onTap: () => _showQuickInfo(context, 'Founded in Bend, Oregon.'),
+              Text(
+                'Our Story',
+                style: theme.textTheme.bodySmall?.copyWith(
+                  fontWeight: FontWeight.w600,
+                  color: theme.colorScheme.primary,
+                ),
               ),
             ],
           ),
           const SizedBox(height: 12),
           Text(
-            '© 2026 Hydro Flask • Prelim Project',
+            '© 2026 Hydro Flask',
             style: theme.textTheme.bodySmall?.copyWith(
               fontSize: 10,
               color: theme.colorScheme.onSurfaceVariant,
             ),
           ),
         ],
-      ),
-    );
-  }
-
-  static void _showQuickInfo(BuildContext context, String message) {
-    ScaffoldMessenger.of(context).hideCurrentSnackBar();
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        behavior: SnackBarBehavior.floating,
-        duration: const Duration(seconds: 2),
-        content: Text(message),
-      ),
-    );
-  }
-}
-
-class _FooterLink extends StatelessWidget {
-  final String label;
-  final VoidCallback onTap;
-
-  const _FooterLink({required this.label, required this.onTap});
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-
-    return InkWell(
-      onTap: onTap,
-      borderRadius: BorderRadius.circular(4),
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
-        child: Text(
-          label,
-          style: theme.textTheme.bodySmall?.copyWith(
-            fontWeight: FontWeight.w600,
-            color: theme.colorScheme.primary,
-          ),
-        ),
       ),
     );
   }
