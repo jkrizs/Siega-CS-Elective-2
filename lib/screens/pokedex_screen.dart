@@ -1,9 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
-import '../models/pokemon.dart';
+import '../providers/pokemon_provider.dart';
 import '../providers/theme_provider.dart';
-import '../services/poke_api_service.dart';
 import '../theme/app_colors.dart';
 import '../theme/app_text_styles.dart';
 import '../widgets/empty_view.dart';
@@ -11,6 +10,7 @@ import '../widgets/error_view.dart';
 import '../widgets/loading_view.dart';
 import '../widgets/pokemon_card.dart';
 import '../widgets/retro_decorations.dart';
+import 'pokemon_detail_screen.dart';
 
 class PokedexScreen extends StatefulWidget {
   const PokedexScreen({super.key});
@@ -20,10 +20,7 @@ class PokedexScreen extends StatefulWidget {
 }
 
 class _PokedexScreenState extends State<PokedexScreen> {
-  final PokeApiService _apiService = PokeApiService();
-  late Future<List<Pokemon>> _pokemonFuture;
   final ScrollController _filterScrollController = ScrollController();
-  String _selectedType = 'ALL';
 
   // Available Pokémon types present in the 30 Kanto Pokémon
   static const List<String> _types = PokemonTypeColors.allFilterTypes;
@@ -34,9 +31,15 @@ class _PokedexScreenState extends State<PokedexScreen> {
   @override
   void initState() {
     super.initState();
-    _loadPokemon();
     _filterScrollController.addListener(_updateScrollArrows);
-    WidgetsBinding.instance.addPostFrameCallback((_) => _updateScrollArrows());
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _updateScrollArrows();
+      // Ensure initial load from Provider if not already fetched
+      final pokemonProvider = context.read<PokemonProvider>();
+      if (pokemonProvider.state == PokemonState.initial) {
+        pokemonProvider.fetchPokemon();
+      }
+    });
   }
 
   @override
@@ -74,21 +77,6 @@ class _PokedexScreenState extends State<PokedexScreen> {
     }
   }
 
-  void _loadPokemon() {
-    _pokemonFuture = _apiService.fetchPokemonList(limit: 30);
-  }
-
-  Future<void> _refreshPokemon() async {
-    setState(() {
-      _loadPokemon();
-    });
-    try {
-      await _pokemonFuture;
-    } catch (_) {
-      // Handled by FutureBuilder
-    }
-  }
-
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
@@ -113,52 +101,39 @@ class _PokedexScreenState extends State<PokedexScreen> {
             ),
           ),
 
-          // 2. Main Content
-          FutureBuilder<List<Pokemon>>(
-            future: _pokemonFuture,
-            builder: (context, snapshot) {
-              if (snapshot.connectionState == ConnectionState.waiting) {
+          // 2. Main Content driven strictly by Provider App State
+          Consumer<PokemonProvider>(
+            builder: (context, pokemonProvider, child) {
+              // 4b. Loading State (Manage states using Provider)
+              if (pokemonProvider.isLoading) {
                 return const LoadingView();
               }
 
-              if (snapshot.hasError) {
-                final error = snapshot.error;
-                final message = error.toString().replaceFirst(
-                  'Exception: ',
-                  '',
-                );
+              // 4c. Error State (Manage states using Provider)
+              if (pokemonProvider.isError) {
                 return ErrorView(
-                  errorMessage: message,
-                  onRetry: () {
-                    setState(() {
-                      _loadPokemon();
-                    });
-                  },
+                  errorMessage: pokemonProvider.errorMessage,
+                  onRetry: () => pokemonProvider.fetchPokemon(),
                 );
               }
 
-              final pokemons = snapshot.data;
-              if (pokemons == null || pokemons.isEmpty) {
+              // Empty State
+              if (pokemonProvider.pokemonList.isEmpty) {
                 return EmptyView(
-                  onRefresh: () {
-                    setState(() {
-                      _loadPokemon();
-                    });
-                  },
+                  onRefresh: () => pokemonProvider.fetchPokemon(),
                 );
               }
 
-              // Apply the active Type Filter (e.g. FIRE, POISON, or ALL)
-              final filteredPokemons = _selectedType == 'ALL'
-                  ? pokemons
-                  : pokemons.where((p) => p.hasType(_selectedType)).toList();
+              // 4a & 8. Success State - Info display from App State
+              final filteredPokemons = pokemonProvider.filteredPokemonList;
+              final selectedType = pokemonProvider.selectedType;
 
               return Column(
                 children: [
-                  // Mobile-optimized Retro Type Filter Bar
-                  _buildTypeFilterBar(isDark),
+                  // Mobile-optimized Retro Type Filter Bar (Sourced from Provider App State)
+                  _buildTypeFilterBar(isDark, pokemonProvider),
 
-                  // Scrollable Grid of Filtered Pokémon
+                  // 5. Scrollable Grid of Pokémon
                   Expanded(
                     child: filteredPokemons.isEmpty
                         ? Center(
@@ -171,7 +146,7 @@ class _PokedexScreenState extends State<PokedexScreen> {
                                     const PokeballWidget(size: 36),
                                     const SizedBox(height: 12),
                                     Text(
-                                      'NO $_selectedType POKÉMON',
+                                      'NO $selectedType POKÉMON',
                                       style: const TextStyle(
                                         fontFamily: 'monospace',
                                         fontSize: 14,
@@ -189,11 +164,8 @@ class _PokedexScreenState extends State<PokedexScreen> {
                                     ),
                                     const SizedBox(height: 14),
                                     GestureDetector(
-                                      onTap: () {
-                                        setState(() {
-                                          _selectedType = 'ALL';
-                                        });
-                                      },
+                                      onTap: () =>
+                                          pokemonProvider.setFilterType('ALL'),
                                       child: Container(
                                         padding: const EdgeInsets.symmetric(
                                           horizontal: 14,
@@ -201,9 +173,8 @@ class _PokedexScreenState extends State<PokedexScreen> {
                                         ),
                                         decoration: BoxDecoration(
                                           color: const Color(0xFF3B4860),
-                                          borderRadius: BorderRadius.circular(
-                                            6,
-                                          ),
+                                          borderRadius:
+                                              BorderRadius.circular(6),
                                         ),
                                         child: const Text(
                                           'RESET FILTER (SHOW ALL)',
@@ -222,7 +193,8 @@ class _PokedexScreenState extends State<PokedexScreen> {
                             ),
                           )
                         : RefreshIndicator(
-                            onRefresh: _refreshPokemon,
+                            // 7. Refresh functionality re-triggering the API call
+                            onRefresh: () => pokemonProvider.fetchPokemon(),
                             color: isDark
                                 ? const Color(0xFF38BDF8)
                                 : const Color(0xFF3B4860),
@@ -234,21 +206,36 @@ class _PokedexScreenState extends State<PokedexScreen> {
                                 final isPhone = constraints.maxWidth < 600;
 
                                 return GridView.builder(
-                                  physics: const AlwaysScrollableScrollPhysics(
+                                  physics:
+                                      const AlwaysScrollableScrollPhysics(
                                     parent: BouncingScrollPhysics(),
                                   ),
                                   padding: EdgeInsets.all(isPhone ? 8 : 12),
                                   gridDelegate:
                                       SliverGridDelegateWithMaxCrossAxisExtent(
-                                        maxCrossAxisExtent: isPhone ? 190 : 220,
-                                        crossAxisSpacing: isPhone ? 8 : 12,
-                                        mainAxisSpacing: isPhone ? 8 : 12,
-                                        childAspectRatio: isPhone ? 0.70 : 0.74,
-                                      ),
+                                    maxCrossAxisExtent:
+                                        isPhone ? 190 : 220,
+                                    crossAxisSpacing: isPhone ? 8 : 12,
+                                    mainAxisSpacing: isPhone ? 8 : 12,
+                                    childAspectRatio:
+                                        isPhone ? 0.70 : 0.74,
+                                  ),
                                   itemCount: filteredPokemons.length,
                                   itemBuilder: (context, index) {
                                     final pokemon = filteredPokemons[index];
-                                    return PokemonCard(pokemon: pokemon);
+                                    // 9. When clicked, select Pokémon in Provider and navigate to detail page
+                                    return PokemonCard(
+                                      pokemon: pokemon,
+                                      onTap: () {
+                                        pokemonProvider.selectPokemon(pokemon);
+                                        Navigator.of(context).push(
+                                          MaterialPageRoute(
+                                            builder: (_) =>
+                                                const PokemonDetailScreen(),
+                                          ),
+                                        );
+                                      },
+                                    );
                                   },
                                 );
                               },
@@ -264,7 +251,7 @@ class _PokedexScreenState extends State<PokedexScreen> {
     );
   }
 
-  /// Top banner mimicking the authentic GBA summary header in Image 1
+  /// Top banner mimicking the authentic GBA summary header
   Widget _buildGbaHeader(bool isDark) {
     final headerBg = AppColors.headerBg(isDark);
     final tabBg = AppColors.headerTabBg(isDark);
@@ -308,7 +295,73 @@ class _PokedexScreenState extends State<PokedexScreen> {
 
           const Spacer(),
 
-          // Night Mode / Day Mode Toggle Button (Icon only)
+          // 7. Manual Refresh Button in header (re-triggers API call)
+          Consumer<PokemonProvider>(
+            builder: (context, provider, _) {
+              return Padding(
+                padding: const EdgeInsets.only(right: 6.0),
+                child: Tooltip(
+                  message: 'Refresh Pokédex',
+                  child: GestureDetector(
+                    behavior: HitTestBehavior.opaque,
+                    onTap: provider.isLoading
+                        ? null
+                        : () => provider.fetchPokemon(),
+                    child: MouseRegion(
+                      cursor: provider.isLoading
+                          ? SystemMouseCursors.basic
+                          : SystemMouseCursors.click,
+                      child: Container(
+                        padding: const EdgeInsets.all(7),
+                        decoration: BoxDecoration(
+                          color: isDark
+                              ? const Color(0xFF0F1522)
+                              : const Color(0xFF00587C),
+                          shape: BoxShape.circle,
+                          border: Border.all(
+                            color: isDark
+                                ? AppColors.retroGoldGlow
+                                : const Color(0xFF80D8FF),
+                            width: 1.5,
+                          ),
+                          boxShadow: [
+                            BoxShadow(
+                              color: (isDark
+                                      ? AppColors.retroGoldGlow
+                                      : const Color(0xFF80D8FF))
+                                  .withValues(alpha: 0.35),
+                              blurRadius: 4,
+                              offset: const Offset(0, 1),
+                            ),
+                          ],
+                        ),
+                        child: provider.isLoading
+                            ? SizedBox(
+                                width: 18,
+                                height: 18,
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2,
+                                  color: isDark
+                                      ? AppColors.retroGoldGlow
+                                      : const Color(0xFFE0F2FE),
+                                ),
+                              )
+                            : Icon(
+                                Icons.refresh_rounded,
+                                color: isDark
+                                  ? AppColors.retroGoldGlow
+                                  : const Color(0xFFE0F2FE),
+                                size: 18,
+                              ),
+                      ),
+                    ),
+                  ),
+                ),
+              );
+            },
+          ),
+
+          // Night Mode / Day Mode Toggle Button
           Padding(
             padding: const EdgeInsets.only(right: 8.0),
             child: InkWell(
@@ -329,11 +382,10 @@ class _PokedexScreenState extends State<PokedexScreen> {
                   ),
                   boxShadow: [
                     BoxShadow(
-                      color:
-                          (isDark
-                                  ? AppColors.retroGoldGlow
-                                  : const Color(0xFF80D8FF))
-                              .withValues(alpha: 0.35),
+                      color: (isDark
+                              ? AppColors.retroGoldGlow
+                              : const Color(0xFF80D8FF))
+                          .withValues(alpha: 0.35),
                       blurRadius: 4,
                       offset: const Offset(0, 1),
                     ),
@@ -355,13 +407,14 @@ class _PokedexScreenState extends State<PokedexScreen> {
   }
 
   /// Retro Horizontal Type Filter Bar with Dynamic Arrows for Phone Navigation
-  Widget _buildTypeFilterBar(bool isDark) {
+  Widget _buildTypeFilterBar(bool isDark, PokemonProvider pokemonProvider) {
     final barBg = AppColors.filterBarBg(isDark);
     final borderCol = AppColors.filterBarBorder(isDark);
     final width = MediaQuery.sizeOf(context).width;
     final isDesktop = width >= 900;
     final showLeft = !isDesktop && _canScrollLeft;
     final showRight = !isDesktop && _canScrollRight;
+    final selectedType = pokemonProvider.selectedType;
 
     return Container(
       height: 50,
@@ -371,14 +424,15 @@ class _PokedexScreenState extends State<PokedexScreen> {
       ),
       child: Row(
         children: [
-          // Left Scroll Arrow (◀) - Appears dynamically on mobile/tablet when scrolled right
+          // Left Scroll Arrow (◀)
           if (showLeft)
             _buildScrollArrow(
               icon: Icons.chevron_left_rounded,
               tooltip: 'Previous types',
               onTap: () {
                 if (_filterScrollController.hasClients) {
-                  final target = (_filterScrollController.offset - 160).clamp(
+                  final target =
+                      (_filterScrollController.offset - 160).clamp(
                     0.0,
                     _filterScrollController.position.maxScrollExtent,
                   );
@@ -392,7 +446,7 @@ class _PokedexScreenState extends State<PokedexScreen> {
               isDark: isDark,
             ),
 
-          // Horizontal Scrolling Chips
+          // Horizontal Scrolling Chips (App State)
           Expanded(
             child: ListView.separated(
               controller: _filterScrollController,
@@ -406,15 +460,11 @@ class _PokedexScreenState extends State<PokedexScreen> {
               separatorBuilder: (context, index) => const SizedBox(width: 6),
               itemBuilder: (context, index) {
                 final type = _types[index];
-                final isSelected = _selectedType == type;
+                final isSelected = selectedType == type;
                 final typeColor = PokemonTypeColors.getColor(type);
 
                 return GestureDetector(
-                  onTap: () {
-                    setState(() {
-                      _selectedType = type;
-                    });
-                  },
+                  onTap: () => pokemonProvider.setFilterType(type),
                   child: AnimatedContainer(
                     duration: const Duration(milliseconds: 150),
                     padding: const EdgeInsets.symmetric(
@@ -425,7 +475,9 @@ class _PokedexScreenState extends State<PokedexScreen> {
                     decoration: BoxDecoration(
                       color: isSelected
                           ? typeColor
-                          : typeColor.withValues(alpha: isDark ? 0.28 : 0.35),
+                          : typeColor.withValues(
+                              alpha: isDark ? 0.28 : 0.35,
+                            ),
                       borderRadius: BorderRadius.circular(6),
                       border: Border.all(
                         color: isSelected
@@ -471,14 +523,15 @@ class _PokedexScreenState extends State<PokedexScreen> {
             ),
           ),
 
-          // Right Scroll Arrow (▶) indicating more types on phone/tablet
+          // Right Scroll Arrow (▶)
           if (showRight)
             _buildScrollArrow(
               icon: Icons.chevron_right_rounded,
               tooltip: 'More types',
               onTap: () {
                 if (_filterScrollController.hasClients) {
-                  final target = (_filterScrollController.offset + 160).clamp(
+                  final target =
+                      (_filterScrollController.offset + 160).clamp(
                     0.0,
                     _filterScrollController.position.maxScrollExtent,
                   );

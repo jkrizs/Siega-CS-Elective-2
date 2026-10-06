@@ -17,11 +17,13 @@ import 'retro_decorations.dart';
 class PokemonCard extends StatelessWidget {
   final Pokemon pokemon;
   final bool usePixelSprite;
+  final VoidCallback? onTap;
 
   const PokemonCard({
     super.key,
     required this.pokemon,
     this.usePixelSprite = false,
+    this.onTap,
   });
 
   @override
@@ -39,25 +41,31 @@ class PokemonCard extends StatelessWidget {
     final footerBg = AppColors.cardFooterBg(isDark);
     final footerBorder = AppColors.cardFooterBorder(isDark);
 
-    return Container(
-      decoration: BoxDecoration(
-        color: cardBg,
+    return Material(
+      color: Colors.transparent,
+      borderRadius: BorderRadius.circular(10),
+      child: InkWell(
+        onTap: onTap,
         borderRadius: BorderRadius.circular(10),
-        border: Border.all(
-          color: cardBorder,
-          width: 2.2,
-        ),
-        boxShadow: const [
-          BoxShadow(
-            color: Color(0x38000000),
-            offset: Offset(2, 3),
-            blurRadius: 0,
+        child: Container(
+          decoration: BoxDecoration(
+            color: cardBg,
+            borderRadius: BorderRadius.circular(10),
+            border: Border.all(
+              color: cardBorder,
+              width: 2.2,
+            ),
+            boxShadow: const [
+              BoxShadow(
+                color: Color(0x38000000),
+                offset: Offset(2, 3),
+                blurRadius: 0,
+              ),
+            ],
           ),
-        ],
-      ),
-      child: ClipRRect(
-        borderRadius: BorderRadius.circular(8),
-        child: Column(
+          child: ClipRRect(
+            borderRadius: BorderRadius.circular(8),
+            child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             // 1. Card Top Bar (Retro ID + Name + Mini Pokéball)
@@ -268,6 +276,8 @@ class PokemonCard extends StatelessWidget {
           ],
         ),
       ),
-    );
+    ),
+  ),
+);
   }
 }
