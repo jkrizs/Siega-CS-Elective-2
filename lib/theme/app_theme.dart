@@ -1,11 +1,9 @@
 import 'package:flutter/material.dart';
 import 'app_colors.dart';
 
-/// Centralized ThemeData configurations for Day and Night modes.
 class AppTheme {
   AppTheme._();
 
-  /// Day Mode (Light Theme)
   static ThemeData get lightTheme {
     return ThemeData(
       useMaterial3: true,
@@ -23,7 +21,6 @@ class AppTheme {
     );
   }
 
-  /// Night Mode (Dark Theme)
   static ThemeData get darkTheme {
     return ThemeData(
       useMaterial3: true,

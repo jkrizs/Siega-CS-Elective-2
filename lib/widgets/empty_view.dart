@@ -3,7 +3,6 @@ import '../theme/app_colors.dart';
 import '../theme/app_text_styles.dart';
 import 'retro_decorations.dart';
 
-/// Empty state widget styled as a classic Bill's PC Storage Box message.
 class EmptyView extends StatelessWidget {
   final VoidCallback onRefresh;
 

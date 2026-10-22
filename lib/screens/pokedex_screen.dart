@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:provider/provider.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../providers/pokemon_provider.dart';
 import '../providers/theme_provider.dart';
@@ -7,22 +7,22 @@ import '../theme/app_colors.dart';
 import '../theme/app_text_styles.dart';
 import '../widgets/empty_view.dart';
 import '../widgets/error_view.dart';
+import '../widgets/favorites_panel.dart';
 import '../widgets/loading_view.dart';
 import '../widgets/pokemon_card.dart';
 import '../widgets/retro_decorations.dart';
 import 'pokemon_detail_screen.dart';
 
-class PokedexScreen extends StatefulWidget {
+class PokedexScreen extends ConsumerStatefulWidget {
   const PokedexScreen({super.key});
 
   @override
-  State<PokedexScreen> createState() => _PokedexScreenState();
+  ConsumerState<PokedexScreen> createState() => _PokedexScreenState();
 }
 
-class _PokedexScreenState extends State<PokedexScreen> {
+class _PokedexScreenState extends ConsumerState<PokedexScreen> {
   final ScrollController _filterScrollController = ScrollController();
 
-  // Available Pokémon types present in the 30 Kanto Pokémon
   static const List<String> _types = PokemonTypeColors.allFilterTypes;
 
   bool _canScrollLeft = false;
@@ -34,10 +34,9 @@ class _PokedexScreenState extends State<PokedexScreen> {
     _filterScrollController.addListener(_updateScrollArrows);
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _updateScrollArrows();
-      // Ensure initial load from Provider if not already fetched
-      final pokemonProvider = context.read<PokemonProvider>();
-      if (pokemonProvider.state == PokemonState.initial) {
-        pokemonProvider.fetchPokemon();
+      final status = ref.read(pokemonProvider).status;
+      if (status == PokemonStatus.initial) {
+        ref.read(pokemonProvider.notifier).fetchPokemon();
       }
     });
   }
@@ -83,15 +82,16 @@ class _PokedexScreenState extends State<PokedexScreen> {
     final scaffoldBg = AppColors.scaffoldBg(isDark);
     final scanlineColor = AppColors.scanline(isDark);
 
+    final pokemonState = ref.watch(pokemonProvider);
+
     return Scaffold(
       backgroundColor: scaffoldBg,
       appBar: PreferredSize(
         preferredSize: const Size.fromHeight(48),
-        child: SafeArea(child: _buildGbaHeader(isDark)),
+        child: SafeArea(child: _buildGbaHeader(isDark, pokemonState)),
       ),
       body: Stack(
         children: [
-          // 1. CRT / LCD Retro Scanline Background (Characteristic of GBA / DS)
           Positioned.fill(
             child: CustomPaint(
               painter: ScanlinePainter(
@@ -101,161 +101,164 @@ class _PokedexScreenState extends State<PokedexScreen> {
             ),
           ),
 
-          // 2. Main Content driven strictly by Provider App State
-          Consumer<PokemonProvider>(
-            builder: (context, pokemonProvider, child) {
-              // 4b. Loading State (Manage states using Provider)
-              if (pokemonProvider.isLoading) {
-                return const LoadingView();
-              }
+          Column(
+            children: [
+              const FavoritesPanel(),
 
-              // 4c. Error State (Manage states using Provider)
-              if (pokemonProvider.isError) {
-                return ErrorView(
-                  errorMessage: pokemonProvider.errorMessage,
-                  onRetry: () => pokemonProvider.fetchPokemon(),
-                );
-              }
-
-              // Empty State
-              if (pokemonProvider.pokemonList.isEmpty) {
-                return EmptyView(
-                  onRefresh: () => pokemonProvider.fetchPokemon(),
-                );
-              }
-
-              // 4a & 8. Success State - Info display from App State
-              final filteredPokemons = pokemonProvider.filteredPokemonList;
-              final selectedType = pokemonProvider.selectedType;
-
-              return Column(
-                children: [
-                  // Mobile-optimized Retro Type Filter Bar (Sourced from Provider App State)
-                  _buildTypeFilterBar(isDark, pokemonProvider),
-
-                  // 5. Scrollable Grid of Pokémon
-                  Expanded(
-                    child: filteredPokemons.isEmpty
-                        ? Center(
-                            child: Padding(
-                              padding: const EdgeInsets.all(24.0),
-                              child: RetroDialogueBox(
-                                child: Column(
-                                  mainAxisSize: MainAxisSize.min,
-                                  children: [
-                                    const PokeballWidget(size: 36),
-                                    const SizedBox(height: 12),
-                                    Text(
-                                      'NO $selectedType POKÉMON',
-                                      style: const TextStyle(
-                                        fontFamily: 'monospace',
-                                        fontSize: 14,
-                                        fontWeight: FontWeight.w900,
-                                      ),
-                                    ),
-                                    const SizedBox(height: 6),
-                                    const Text(
-                                      'No Pokémon match this filter in the first 30 entries.',
-                                      style: TextStyle(
-                                        fontFamily: 'monospace',
-                                        fontSize: 11,
-                                      ),
-                                      textAlign: TextAlign.center,
-                                    ),
-                                    const SizedBox(height: 14),
-                                    GestureDetector(
-                                      onTap: () =>
-                                          pokemonProvider.setFilterType('ALL'),
-                                      child: Container(
-                                        padding: const EdgeInsets.symmetric(
-                                          horizontal: 14,
-                                          vertical: 8,
-                                        ),
-                                        decoration: BoxDecoration(
-                                          color: const Color(0xFF3B4860),
-                                          borderRadius:
-                                              BorderRadius.circular(6),
-                                        ),
-                                        child: const Text(
-                                          'RESET FILTER (SHOW ALL)',
-                                          style: TextStyle(
-                                            fontFamily: 'monospace',
-                                            color: Color(0xFFE8E088),
-                                            fontSize: 11,
-                                            fontWeight: FontWeight.w900,
-                                          ),
-                                        ),
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                              ),
-                            ),
-                          )
-                        : RefreshIndicator(
-                            // 7. Refresh functionality re-triggering the API call
-                            onRefresh: () => pokemonProvider.fetchPokemon(),
-                            color: isDark
-                                ? const Color(0xFF38BDF8)
-                                : const Color(0xFF3B4860),
-                            backgroundColor: isDark
-                                ? const Color(0xFF1E2532)
-                                : Colors.white,
-                            child: LayoutBuilder(
-                              builder: (context, constraints) {
-                                final isPhone = constraints.maxWidth < 600;
-
-                                return GridView.builder(
-                                  physics:
-                                      const AlwaysScrollableScrollPhysics(
-                                    parent: BouncingScrollPhysics(),
-                                  ),
-                                  padding: EdgeInsets.all(isPhone ? 8 : 12),
-                                  gridDelegate:
-                                      SliverGridDelegateWithMaxCrossAxisExtent(
-                                    maxCrossAxisExtent:
-                                        isPhone ? 190 : 220,
-                                    crossAxisSpacing: isPhone ? 8 : 12,
-                                    mainAxisSpacing: isPhone ? 8 : 12,
-                                    childAspectRatio:
-                                        isPhone ? 0.70 : 0.74,
-                                  ),
-                                  itemCount: filteredPokemons.length,
-                                  itemBuilder: (context, index) {
-                                    final pokemon = filteredPokemons[index];
-                                    // 9. When clicked, select Pokémon in Provider and navigate to detail page
-                                    return PokemonCard(
-                                      pokemon: pokemon,
-                                      onTap: () {
-                                        pokemonProvider.selectPokemon(pokemon);
-                                        Navigator.of(context).push(
-                                          MaterialPageRoute(
-                                            builder: (_) =>
-                                                const PokemonDetailScreen(),
-                                          ),
-                                        );
-                                      },
-                                    );
-                                  },
-                                );
-                              },
-                            ),
-                          ),
-                  ),
-                ],
-              );
-            },
+              Expanded(
+                child: _buildBodyContent(isDark, pokemonState),
+              ),
+            ],
           ),
         ],
       ),
     );
   }
 
-  /// Top banner mimicking the authentic GBA summary header
-  Widget _buildGbaHeader(bool isDark) {
+  Widget _buildBodyContent(bool isDark, PokemonState pokemonState) {
+    if (pokemonState.isLoading) {
+      return const LoadingView();
+    }
+
+    if (pokemonState.isError) {
+      return ErrorView(
+        errorMessage: pokemonState.errorMessage,
+        onRetry: () => ref.read(pokemonProvider.notifier).fetchPokemon(),
+      );
+    }
+
+    if (pokemonState.pokemonList.isEmpty) {
+      return EmptyView(
+        onRefresh: () => ref.read(pokemonProvider.notifier).fetchPokemon(),
+      );
+    }
+
+    final filteredPokemons = pokemonState.filteredPokemonList;
+    final selectedType = pokemonState.selectedType;
+
+    return Column(
+      children: [
+        _buildTypeFilterBar(isDark, selectedType),
+
+        Expanded(
+          child: filteredPokemons.isEmpty
+              ? _buildNoFilteredPokemonView(selectedType)
+              : RefreshIndicator(
+                  onRefresh: () =>
+                      ref.read(pokemonProvider.notifier).fetchPokemon(),
+                  color: isDark
+                      ? const Color(0xFF38BDF8)
+                      : const Color(0xFF3B4860),
+                  backgroundColor: isDark
+                      ? const Color(0xFF1E2532)
+                      : Colors.white,
+                  child: LayoutBuilder(
+                    builder: (context, constraints) {
+                      final isPhone = constraints.maxWidth < 600;
+
+                      return GridView.builder(
+                        physics: const AlwaysScrollableScrollPhysics(
+                          parent: BouncingScrollPhysics(),
+                        ),
+                        padding: EdgeInsets.all(isPhone ? 8 : 12),
+                        gridDelegate:
+                            SliverGridDelegateWithMaxCrossAxisExtent(
+                          maxCrossAxisExtent: isPhone ? 190 : 220,
+                          crossAxisSpacing: isPhone ? 8 : 12,
+                          mainAxisSpacing: isPhone ? 8 : 12,
+                          childAspectRatio: isPhone ? 0.68 : 0.72,
+                        ),
+                        itemCount: filteredPokemons.length,
+                        itemBuilder: (context, index) {
+                          final pokemon = filteredPokemons[index];
+                          return PokemonCard(
+                            pokemon: pokemon,
+                            onTap: () {
+                              ref
+                                  .read(pokemonProvider.notifier)
+                                  .selectPokemon(pokemon);
+                              Navigator.of(context).push(
+                                MaterialPageRoute(
+                                  builder: (_) =>
+                                      const PokemonDetailScreen(),
+                                ),
+                              );
+                            },
+                          );
+                        },
+                      );
+                    },
+                  ),
+                ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildNoFilteredPokemonView(String selectedType) {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(24.0),
+        child: RetroDialogueBox(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const PokeballWidget(size: 36),
+              const SizedBox(height: 12),
+              Text(
+                'NO $selectedType POKÉMON',
+                style: const TextStyle(
+                  fontFamily: 'monospace',
+                  fontSize: 14,
+                  fontWeight: FontWeight.w900,
+                ),
+              ),
+              const SizedBox(height: 6),
+              const Text(
+                'No Pokémon match this filter in the registered list.',
+                style: TextStyle(
+                  fontFamily: 'monospace',
+                  fontSize: 11,
+                ),
+                textAlign: TextAlign.center,
+              ),
+              const SizedBox(height: 14),
+              GestureDetector(
+                onTap: () =>
+                    ref.read(pokemonProvider.notifier).clearTypeFilter(),
+                child: Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 14,
+                    vertical: 8,
+                  ),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF3B4860),
+                    borderRadius: BorderRadius.circular(6),
+                  ),
+                  child: const Text(
+                    'CLEAR FILTER (SHOW ALL)',
+                    style: TextStyle(
+                      fontFamily: 'monospace',
+                      color: Color(0xFFE8E088),
+                      fontSize: 11,
+                      fontWeight: FontWeight.w900,
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildGbaHeader(bool isDark, PokemonState pokemonState) {
     final headerBg = AppColors.headerBg(isDark);
     final tabBg = AppColors.headerTabBg(isDark);
     final borderCol = AppColors.headerBorder(isDark);
+    final isFavOpen = pokemonState.isFavoritesPanelExpanded;
+    final favCount = pokemonState.favorites.length;
 
     return Container(
       height: 48,
@@ -265,7 +268,6 @@ class _PokedexScreenState extends State<PokedexScreen> {
       ),
       child: Row(
         children: [
-          // Left golden/cream tab with rounded right end
           Container(
             height: 48,
             padding: const EdgeInsets.symmetric(horizontal: 14),
@@ -282,8 +284,7 @@ class _PokedexScreenState extends State<PokedexScreen> {
               mainAxisSize: MainAxisSize.min,
               children: [
                 const Text('POKÉDEX', style: AppTextStyles.headerTitle),
-                const SizedBox(width: 10),
-                // Three retro indicator pill dots (Olive, Translucent, White)
+                const SizedBox(width: 8),
                 _buildHeaderPill(const Color(0xFF888844)),
                 const SizedBox(width: 4),
                 _buildHeaderPill(const Color(0x88888844)),
@@ -295,78 +296,153 @@ class _PokedexScreenState extends State<PokedexScreen> {
 
           const Spacer(),
 
-          // 7. Manual Refresh Button in header (re-triggers API call)
-          Consumer<PokemonProvider>(
-            builder: (context, provider, _) {
-              return Padding(
-                padding: const EdgeInsets.only(right: 6.0),
-                child: Tooltip(
-                  message: 'Refresh Pokédex',
-                  child: GestureDetector(
-                    behavior: HitTestBehavior.opaque,
-                    onTap: provider.isLoading
-                        ? null
-                        : () => provider.fetchPokemon(),
-                    child: MouseRegion(
-                      cursor: provider.isLoading
-                          ? SystemMouseCursors.basic
-                          : SystemMouseCursors.click,
-                      child: Container(
-                        padding: const EdgeInsets.all(7),
-                        decoration: BoxDecoration(
-                          color: isDark
-                              ? const Color(0xFF0F1522)
-                              : const Color(0xFF00587C),
-                          shape: BoxShape.circle,
-                          border: Border.all(
-                            color: isDark
-                                ? AppColors.retroGoldGlow
-                                : const Color(0xFF80D8FF),
-                            width: 1.5,
-                          ),
-                          boxShadow: [
-                            BoxShadow(
-                              color: (isDark
-                                      ? AppColors.retroGoldGlow
-                                      : const Color(0xFF80D8FF))
-                                  .withValues(alpha: 0.35),
-                              blurRadius: 4,
-                              offset: const Offset(0, 1),
-                            ),
-                          ],
-                        ),
-                        child: provider.isLoading
-                            ? SizedBox(
-                                width: 18,
-                                height: 18,
-                                child: CircularProgressIndicator(
-                                  strokeWidth: 2,
-                                  color: isDark
-                                      ? AppColors.retroGoldGlow
-                                      : const Color(0xFFE0F2FE),
-                                ),
-                              )
-                            : Icon(
-                                Icons.refresh_rounded,
-                                color: isDark
-                                  ? AppColors.retroGoldGlow
-                                  : const Color(0xFFE0F2FE),
-                                size: 18,
-                              ),
-                      ),
+          Padding(
+            padding: const EdgeInsets.only(right: 6.0),
+            child: Tooltip(
+              message: isFavOpen ? 'Collapse Favorites' : 'Expand Favorites',
+              child: InkWell(
+                borderRadius: BorderRadius.circular(16),
+                onTap: () => ref
+                    .read(pokemonProvider.notifier)
+                    .toggleFavoritesPanel(),
+                child: AnimatedContainer(
+                  duration: const Duration(milliseconds: 200),
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 9, vertical: 5),
+                  decoration: BoxDecoration(
+                    color: isFavOpen
+                        ? const Color(0xFFEF4444)
+                        : (isDark
+                            ? const Color(0xFF0F1522)
+                            : const Color(0xFF00587C)),
+                    borderRadius: BorderRadius.circular(16),
+                    border: Border.all(
+                      color: isFavOpen
+                          ? Colors.white
+                          : (isDark
+                              ? AppColors.retroGoldGlow
+                              : const Color(0xFF80D8FF)),
+                      width: 1.5,
                     ),
+                    boxShadow: [
+                      BoxShadow(
+                        color: (isFavOpen
+                                ? const Color(0xFFEF4444)
+                                : (isDark
+                                    ? AppColors.retroGoldGlow
+                                    : const Color(0xFF80D8FF)))
+                            .withValues(alpha: 0.35),
+                        blurRadius: 4,
+                        offset: const Offset(0, 1),
+                      ),
+                    ],
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(
+                        Icons.favorite,
+                        size: 15,
+                        color: isFavOpen
+                            ? Colors.white
+                            : const Color(0xFFEF4444),
+                      ),
+                      const SizedBox(width: 5),
+                      Text(
+                        '$favCount',
+                        style: TextStyle(
+                          fontFamily: 'monospace',
+                          fontSize: 11,
+                          fontWeight: FontWeight.w900,
+                          color: isFavOpen
+                              ? Colors.white
+                              : (isDark
+                                  ? AppColors.retroGoldGlow
+                                  : const Color(0xFFE0F2FE)),
+                        ),
+                      ),
+                      const SizedBox(width: 3),
+                      Icon(
+                        isFavOpen
+                            ? Icons.keyboard_arrow_up
+                            : Icons.keyboard_arrow_down,
+                        size: 16,
+                        color: isFavOpen
+                            ? Colors.white
+                            : (isDark
+                                ? AppColors.retroGoldGlow
+                                : const Color(0xFFE0F2FE)),
+                      ),
+                    ],
                   ),
                 ),
-              );
-            },
+              ),
+            ),
           ),
 
-          // Night Mode / Day Mode Toggle Button
+          Padding(
+            padding: const EdgeInsets.only(right: 6.0),
+            child: Tooltip(
+              message: 'Refresh Pokémon',
+              child: GestureDetector(
+                behavior: HitTestBehavior.opaque,
+                onTap: pokemonState.isLoading
+                    ? null
+                    : () => ref
+                        .read(pokemonProvider.notifier)
+                        .fetchPokemon(),
+                child: Container(
+                  padding: const EdgeInsets.all(7),
+                  decoration: BoxDecoration(
+                    color: isDark
+                        ? const Color(0xFF0F1522)
+                        : const Color(0xFF00587C),
+                    shape: BoxShape.circle,
+                    border: Border.all(
+                      color: isDark
+                          ? AppColors.retroGoldGlow
+                          : const Color(0xFF80D8FF),
+                      width: 1.5,
+                    ),
+                    boxShadow: [
+                      BoxShadow(
+                        color: (isDark
+                                ? AppColors.retroGoldGlow
+                                : const Color(0xFF80D8FF))
+                            .withValues(alpha: 0.35),
+                        blurRadius: 4,
+                        offset: const Offset(0, 1),
+                      ),
+                    ],
+                  ),
+                  child: pokemonState.isLoading
+                      ? SizedBox(
+                          width: 18,
+                          height: 18,
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2,
+                            color: isDark
+                                ? AppColors.retroGoldGlow
+                                : const Color(0xFFE0F2FE),
+                          ),
+                        )
+                      : Icon(
+                          Icons.refresh_rounded,
+                          color: isDark
+                              ? AppColors.retroGoldGlow
+                              : const Color(0xFFE0F2FE),
+                          size: 18,
+                        ),
+                ),
+              ),
+            ),
+          ),
+
           Padding(
             padding: const EdgeInsets.only(right: 8.0),
             child: InkWell(
               borderRadius: BorderRadius.circular(20),
-              onTap: () => context.read<ThemeProvider>().toggleTheme(),
+              onTap: () => ref.read(themeProvider.notifier).toggleTheme(),
               child: Container(
                 padding: const EdgeInsets.all(7),
                 decoration: BoxDecoration(
@@ -406,15 +482,13 @@ class _PokedexScreenState extends State<PokedexScreen> {
     );
   }
 
-  /// Retro Horizontal Type Filter Bar with Dynamic Arrows for Phone Navigation
-  Widget _buildTypeFilterBar(bool isDark, PokemonProvider pokemonProvider) {
+  Widget _buildTypeFilterBar(bool isDark, String selectedType) {
     final barBg = AppColors.filterBarBg(isDark);
     final borderCol = AppColors.filterBarBorder(isDark);
     final width = MediaQuery.sizeOf(context).width;
     final isDesktop = width >= 900;
     final showLeft = !isDesktop && _canScrollLeft;
     final showRight = !isDesktop && _canScrollRight;
-    final selectedType = pokemonProvider.selectedType;
 
     return Container(
       height: 50,
@@ -424,7 +498,6 @@ class _PokedexScreenState extends State<PokedexScreen> {
       ),
       child: Row(
         children: [
-          // Left Scroll Arrow (◀)
           if (showLeft)
             _buildScrollArrow(
               icon: Icons.chevron_left_rounded,
@@ -446,7 +519,6 @@ class _PokedexScreenState extends State<PokedexScreen> {
               isDark: isDark,
             ),
 
-          // Horizontal Scrolling Chips (App State)
           Expanded(
             child: ListView.separated(
               controller: _filterScrollController,
@@ -464,7 +536,13 @@ class _PokedexScreenState extends State<PokedexScreen> {
                 final typeColor = PokemonTypeColors.getColor(type);
 
                 return GestureDetector(
-                  onTap: () => pokemonProvider.setFilterType(type),
+                  onTap: () {
+                    if (isSelected && type != 'ALL') {
+                      ref.read(pokemonProvider.notifier).clearTypeFilter();
+                    } else {
+                      ref.read(pokemonProvider.notifier).setTypeFilter(type);
+                    }
+                  },
                   child: AnimatedContainer(
                     duration: const Duration(milliseconds: 150),
                     padding: const EdgeInsets.symmetric(
@@ -523,7 +601,51 @@ class _PokedexScreenState extends State<PokedexScreen> {
             ),
           ),
 
-          // Right Scroll Arrow (▶)
+          if (selectedType != 'ALL')
+            Padding(
+              padding: const EdgeInsets.only(right: 6.0),
+              child: Tooltip(
+                message: 'Clear Type Filter',
+                child: InkWell(
+                  borderRadius: BorderRadius.circular(6),
+                  onTap: () =>
+                      ref.read(pokemonProvider.notifier).clearTypeFilter(),
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 8, vertical: 6),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFEF4444).withValues(alpha: 0.2),
+                      borderRadius: BorderRadius.circular(6),
+                      border: Border.all(
+                        color: const Color(0xFFEF4444),
+                        width: 1.2,
+                      ),
+                    ),
+                    child: const Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(
+                          Icons.filter_alt_off_rounded,
+                          size: 14,
+                          color: Color(0xFFEF4444),
+                        ),
+                        SizedBox(width: 4),
+                        Text(
+                          'CLEAR',
+                          style: TextStyle(
+                            fontFamily: 'monospace',
+                            fontSize: 10,
+                            fontWeight: FontWeight.w900,
+                            color: Color(0xFFEF4444),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+            ),
+
           if (showRight)
             _buildScrollArrow(
               icon: Icons.chevron_right_rounded,
@@ -549,7 +671,6 @@ class _PokedexScreenState extends State<PokedexScreen> {
     );
   }
 
-  /// Navigation arrow button for smooth scrolling of the retro type chips
   Widget _buildScrollArrow({
     required IconData icon,
     required String tooltip,

@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import '../theme/app_text_styles.dart';
 import 'retro_decorations.dart';
 
-/// Loading state widget styled after classic Game Boy Advance & DS save/load screens.
 class LoadingView extends StatefulWidget {
   final String message;
 
@@ -44,7 +43,6 @@ class _LoadingViewState extends State<LoadingView>
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              // Rotating 8-bit / vector Pokéball
               RotationTransition(
                 turns: _controller,
                 child: const PokeballWidget(size: 44),

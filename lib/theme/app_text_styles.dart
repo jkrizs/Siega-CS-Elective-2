@@ -1,14 +1,11 @@
 import 'package:flutter/material.dart';
 import 'app_colors.dart';
 
-/// Centralized monospace typography system matching classic Game Boy Advance
-/// and Nintendo DS Pokémon games.
 class AppTextStyles {
   AppTextStyles._();
 
   static const String fontFamily = 'monospace';
 
-  // --- Header Styles ---
   static const TextStyle headerTitle = TextStyle(
     fontFamily: fontFamily,
     fontSize: 15,
@@ -24,7 +21,6 @@ class AppTextStyles {
     ],
   );
 
-  // --- Pokémon Card Styles ---
   static const TextStyle pokemonId = TextStyle(
     fontFamily: fontFamily,
     fontSize: 10.5,
@@ -69,7 +65,6 @@ class AppTextStyles {
     color: AppColors.genderFemale,
   );
 
-  // --- Filter Bar Styles ---
   static TextStyle filterChip({required bool isSelected}) => TextStyle(
         fontFamily: fontFamily,
         color: isSelected ? Colors.white : const Color(0xFFD4DAE8),
@@ -78,7 +73,6 @@ class AppTextStyles {
         letterSpacing: 0.5,
       );
 
-  // --- Type Badge Styles ---
   static const TextStyle typeBadge = TextStyle(
     fontFamily: fontFamily,
     color: Colors.white,
@@ -94,7 +88,6 @@ class AppTextStyles {
     ],
   );
 
-  // --- Dialogue & State Messages ---
   static const TextStyle dialogueTitle = TextStyle(
     fontFamily: fontFamily,
     fontSize: 15,

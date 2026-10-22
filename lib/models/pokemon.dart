@@ -1,4 +1,3 @@
-/// Model representing an individual Pokémon from the PokéAPI list.
 class Pokemon {
   final int id;
   final String name;
@@ -20,25 +19,20 @@ class Pokemon {
     required this.maxHp,
   });
 
-  /// Factory constructor to parse Pokémon from PokéAPI results item.
   factory Pokemon.fromJson(Map<String, dynamic> json) {
     final name = json['name'] as String? ?? '';
     final url = json['url'] as String? ?? '';
 
-    // Extract ID from the end of the URL (e.g. ".../pokemon/1/")
     final uri = Uri.tryParse(url);
     final segments = uri?.pathSegments.where((s) => s.isNotEmpty).toList() ?? [];
     final id = segments.isNotEmpty ? int.tryParse(segments.last) ?? 0 : 0;
 
-    // High quality official artwork photo
     final imageUrl =
         'https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/other/official-artwork/$id.png';
 
-    // Authentic retro GBA FireRed sprite
     final spriteUrl =
         'https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/versions/generation-iii/firered-leafgreen/$id.png';
 
-    // Canonical Gen 1 stats & types for the first 30 Pokémon
     final typeInfo = _kantoPokemonData[id] ?? _PokemonTypeInfo('Normal', null, 50);
 
     return Pokemon(
@@ -53,22 +47,17 @@ class Pokemon {
     );
   }
 
-  /// Formatted ID matching the classic Game Boy look (e.g., No.001, No.025).
   String get formattedId => 'No.${id.toString().padLeft(3, '0')}';
 
-  /// Standard hash-prefixed ID (e.g., #001).
   String get hashId => '#${id.toString().padLeft(3, '0')}';
 
-  /// Capitalized display name (e.g., "Bulbasaur").
   String get displayName {
     if (name.isEmpty) return '';
     return name[0].toUpperCase() + name.substring(1).toLowerCase();
   }
 
-  /// Uppercase retro game name (e.g., "BULBASAUR", "CHARIZARD").
   String get retroName => name.toUpperCase();
 
-  /// Checks if this Pokémon matches the given type filter (primary or secondary).
   bool hasType(String type) {
     if (type.toUpperCase() == 'ALL') return true;
     final normalized = type.trim().toUpperCase();
@@ -121,7 +110,6 @@ final Map<int, _PokemonTypeInfo> _kantoPokemonData = {
   30: const _PokemonTypeInfo('Poison', null, 70),
 };
 
-/// Model representing the response envelope from PokéAPI endpoint `/api/v2/pokemon`.
 class PokemonListResponse {
   final int count;
   final String? next;

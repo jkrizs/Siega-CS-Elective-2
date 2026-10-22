@@ -1,3 +1,4 @@
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
@@ -6,20 +7,26 @@ import 'package:siega_pokedexlist/providers/pokemon_provider.dart';
 import 'package:siega_pokedexlist/services/poke_api_service.dart';
 
 void main() {
-  group('PokemonProvider State Management', () {
-    test('initial state is initial and pokemon list is empty', () {
-      final provider = PokemonProvider();
+  group('PokemonNotifier Riverpod State Management', () {
+    test('initial state has correct defaults', () {
+      final container = ProviderContainer();
+      addTearDown(container.dispose);
 
-      expect(provider.state, PokemonState.initial);
-      expect(provider.isLoading, false);
-      expect(provider.isSuccess, false);
-      expect(provider.isError, false);
-      expect(provider.pokemonList, isEmpty);
-      expect(provider.selectedPokemon, isNull);
-      expect(provider.selectedType, 'ALL');
+      final state = container.read(pokemonProvider);
+
+      expect(state.status, PokemonStatus.initial);
+      expect(state.isLoading, false);
+      expect(state.isSuccess, false);
+      expect(state.isError, false);
+      expect(state.pokemonList, isEmpty);
+      expect(state.selectedPokemon, isNull);
+      expect(state.selectedType, 'ALL');
+      expect(state.nicknames, isEmpty);
+      expect(state.favorites, isEmpty);
+      expect(state.isFavoritesPanelExpanded, false);
     });
 
-    test('fetchPokemon updates states through loading and success', () async {
+    test('1. Pokémon List Management: fetchPokemon updates through loading and success', () async {
       final mockClient = MockClient((request) async {
         return http.Response(
           '''
@@ -36,39 +43,116 @@ void main() {
         );
       });
 
-      final service = PokeApiService(client: mockClient);
-      final provider = PokemonProvider(apiService: service);
+      final mockService = PokeApiService(client: mockClient);
 
-      final future = provider.fetchPokemon();
-      expect(provider.isLoading, true);
+      final container = ProviderContainer(
+        overrides: [
+          pokeApiServiceProvider.overrideWithValue(mockService),
+        ],
+      );
+      addTearDown(container.dispose);
+
+      final notifier = container.read(pokemonProvider.notifier);
+      final future = notifier.fetchPokemon();
+
+      expect(container.read(pokemonProvider).isLoading, true);
 
       await future;
 
-      expect(provider.isSuccess, true);
-      expect(provider.isLoading, false);
-      expect(provider.pokemonList.length, 2);
-      expect(provider.pokemonList[0].name, 'bulbasaur');
-      expect(provider.pokemonList[1].name, 'charmander');
+      final state = container.read(pokemonProvider);
+      expect(state.isSuccess, true);
+      expect(state.isLoading, false);
+      expect(state.pokemonList.length, 2);
+      expect(state.pokemonList[0].name, 'bulbasaur');
+      expect(state.pokemonList[1].name, 'charmander');
     });
 
-    test('fetchPokemon transitions to error state on failure', () async {
+    test('1. Pokémon List Management: fetchPokemon transitions to error state on failure', () async {
       final mockClient = MockClient((request) async {
         return http.Response('Internal Server Error', 500);
       });
 
-      final service = PokeApiService(client: mockClient);
-      final provider = PokemonProvider(apiService: service);
+      final mockService = PokeApiService(client: mockClient);
 
-      await provider.fetchPokemon();
+      final container = ProviderContainer(
+        overrides: [
+          pokeApiServiceProvider.overrideWithValue(mockService),
+        ],
+      );
+      addTearDown(container.dispose);
 
-      expect(provider.isError, true);
-      expect(provider.isLoading, false);
-      expect(provider.errorMessage, isNotEmpty);
-      expect(provider.pokemonList, isEmpty);
+      final notifier = container.read(pokemonProvider.notifier);
+      await notifier.fetchPokemon();
+
+      final state = container.read(pokemonProvider);
+      expect(state.isError, true);
+      expect(state.isLoading, false);
+      expect(state.errorMessage, isNotEmpty);
+      expect(state.pokemonList, isEmpty);
     });
 
-    test('selectPokemon and clearSelectedPokemon update App State', () {
-      final provider = PokemonProvider();
+    test('2. Pokémon Nickname Editor: setNickname and removeNickname update App State', () {
+      final container = ProviderContainer();
+      addTearDown(container.dispose);
+
+      final notifier = container.read(pokemonProvider.notifier);
+
+      // Set nickname
+      notifier.setNickname(25, 'Sparky');
+      expect(container.read(pokemonProvider).getNickname(25), 'Sparky');
+
+      // Edit nickname
+      notifier.setNickname(25, 'Thunder');
+      expect(container.read(pokemonProvider).getNickname(25), 'Thunder');
+
+      // Remove nickname
+      notifier.removeNickname(25);
+      expect(container.read(pokemonProvider).getNickname(25), isNull);
+    });
+
+    test('3 & 4. Favorites & Retractable Panel: toggleFavorite and toggleFavoritesPanel update App State', () {
+      final container = ProviderContainer();
+      addTearDown(container.dispose);
+
+      final notifier = container.read(pokemonProvider.notifier);
+
+      expect(container.read(pokemonProvider).isFavorite(1), false);
+      expect(container.read(pokemonProvider).isFavoritesPanelExpanded, false);
+
+      // Add to favorites
+      notifier.toggleFavorite(1);
+      expect(container.read(pokemonProvider).isFavorite(1), true);
+
+      // Remove from favorites
+      notifier.toggleFavorite(1);
+      expect(container.read(pokemonProvider).isFavorite(1), false);
+
+      // Toggle Retractable Panel
+      notifier.toggleFavoritesPanel();
+      expect(container.read(pokemonProvider).isFavoritesPanelExpanded, true);
+
+      notifier.toggleFavoritesPanel();
+      expect(container.read(pokemonProvider).isFavoritesPanelExpanded, false);
+    });
+
+    test('5. Pokémon Type Filter: setTypeFilter and clearTypeFilter update App State', () {
+      final container = ProviderContainer();
+      addTearDown(container.dispose);
+
+      final notifier = container.read(pokemonProvider.notifier);
+
+      notifier.setTypeFilter('Fire');
+      expect(container.read(pokemonProvider).selectedType, 'Fire');
+
+      notifier.clearTypeFilter();
+      expect(container.read(pokemonProvider).selectedType, 'ALL');
+    });
+
+    test('Selected Pokémon for Detail Screen updates App State', () {
+      final container = ProviderContainer();
+      addTearDown(container.dispose);
+
+      final notifier = container.read(pokemonProvider.notifier);
       final pokemon = Pokemon(
         id: 25,
         name: 'pikachu',
@@ -79,43 +163,11 @@ void main() {
         maxHp: 35,
       );
 
-      provider.selectPokemon(pokemon);
-      expect(provider.selectedPokemon, equals(pokemon));
-      expect(provider.selectedPokemon?.name, 'pikachu');
-      expect(provider.selectedPokemon?.id, 25);
+      notifier.selectPokemon(pokemon);
+      expect(container.read(pokemonProvider).selectedPokemon, equals(pokemon));
 
-      provider.clearSelectedPokemon();
-      expect(provider.selectedPokemon, isNull);
-    });
-
-    test('setFilterType updates selectedType and filteredPokemonList', () {
-      final provider = PokemonProvider();
-      final bulbasaur = Pokemon(
-        id: 1,
-        name: 'bulbasaur',
-        url: 'https://pokeapi.co/api/v2/pokemon/1/',
-        imageUrl: 'https://example.com/1.png',
-        spriteUrl: 'https://example.com/sprite/1.png',
-        primaryType: 'Grass',
-        secondaryType: 'Poison',
-        maxHp: 45,
-      );
-      final charmander = Pokemon(
-        id: 4,
-        name: 'charmander',
-        url: 'https://pokeapi.co/api/v2/pokemon/4/',
-        imageUrl: 'https://example.com/4.png',
-        spriteUrl: 'https://example.com/sprite/4.png',
-        primaryType: 'Fire',
-        maxHp: 39,
-      );
-
-      // Test filter type update
-      provider.selectPokemon(bulbasaur);
-      expect(provider.selectedPokemon?.id, charmander.id - 3);
-
-      provider.setFilterType('FIRE');
-      expect(provider.selectedType, 'FIRE');
+      notifier.clearSelectedPokemon();
+      expect(container.read(pokemonProvider).selectedPokemon, isNull);
     });
   });
 }

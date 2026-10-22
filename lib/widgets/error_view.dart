@@ -3,7 +3,6 @@ import '../theme/app_colors.dart';
 import '../theme/app_text_styles.dart';
 import 'retro_decorations.dart';
 
-/// Error state widget displayed with classic RPG dialogue box styling.
 class ErrorView extends StatelessWidget {
   final String errorMessage;
   final VoidCallback onRetry;
@@ -54,7 +53,6 @@ class ErrorView extends StatelessWidget {
                 textAlign: TextAlign.center,
               ),
               const SizedBox(height: 20),
-              // Retro GBA-style button
               GestureDetector(
                 onTap: onRetry,
                 child: Container(

@@ -1,102 +1,176 @@
-import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../models/pokemon.dart';
 import '../services/poke_api_service.dart';
 
-/// Enum representing the 3 main states required by the activity instructions:
-/// - Loading State
-/// - Success State (info display)
-/// - Error State
-enum PokemonState {
+enum PokemonStatus {
   initial,
   loading,
   success,
   error,
 }
 
-/// Provider managing the Pokémon App State.
-///
-/// Complies with:
-/// 4. Manage the states using Provider (Success, Loading, Error)
-/// 6. API call must be a method in the Provider
-/// 7. Refresh functionality re-triggering the API call
-/// 8. All UI values come from APP STATE (not ephemeral)
-/// 9. Selected Pokémon stored in Provider for individual detail page
-class PokemonProvider extends ChangeNotifier {
-  final PokeApiService _apiService;
+@immutable
+class PokemonState {
+  final PokemonStatus status;
+  final List<Pokemon> pokemonList;
+  final String errorMessage;
+  final Pokemon? selectedPokemon;
+  final String selectedType;
+  final Map<int, String> nicknames;
+  final Set<int> favorites;
+  final bool isFavoritesPanelExpanded;
 
-  PokemonState _state = PokemonState.initial;
-  List<Pokemon> _pokemonList = [];
-  String _errorMessage = '';
-  Pokemon? _selectedPokemon;
-  String _selectedType = 'ALL';
+  const PokemonState({
+    this.status = PokemonStatus.initial,
+    this.pokemonList = const [],
+    this.errorMessage = '',
+    this.selectedPokemon,
+    this.selectedType = 'ALL',
+    this.nicknames = const {},
+    this.favorites = const {},
+    this.isFavoritesPanelExpanded = false,
+  });
 
-  PokemonProvider({PokeApiService? apiService})
-      : _apiService = apiService ?? PokeApiService();
+  bool get isLoading => status == PokemonStatus.loading;
+  bool get isSuccess => status == PokemonStatus.success;
+  bool get isError => status == PokemonStatus.error;
 
-  // State Getters
-  PokemonState get state => _state;
-  bool get isLoading => _state == PokemonState.loading;
-  bool get isSuccess => _state == PokemonState.success;
-  bool get isError => _state == PokemonState.error;
-
-  List<Pokemon> get pokemonList => _pokemonList;
-  String get errorMessage => _errorMessage;
-  Pokemon? get selectedPokemon => _selectedPokemon;
-  String get selectedType => _selectedType;
-
-  /// Returns Pokémon filtered by the currently selected type from App State
   List<Pokemon> get filteredPokemonList {
-    if (_selectedType == 'ALL') {
-      return _pokemonList;
+    if (selectedType == 'ALL') {
+      return pokemonList;
     }
-    return _pokemonList.where((p) => p.hasType(_selectedType)).toList();
+    return pokemonList.where((p) => p.hasType(selectedType)).toList();
   }
 
-  /// Fetches the first 30 Pokémon from PokéAPI and manages loading/success/error states.
-  Future<void> fetchPokemon({bool showLoading = true, bool clearData = true}) async {
+  List<Pokemon> get favoritePokemonList {
+    return pokemonList.where((p) => favorites.contains(p.id)).toList();
+  }
+
+  bool isFavorite(int pokemonId) => favorites.contains(pokemonId);
+
+  String? getNickname(int pokemonId) => nicknames[pokemonId];
+
+  PokemonState copyWith({
+    PokemonStatus? status,
+    List<Pokemon>? pokemonList,
+    String? errorMessage,
+    Pokemon? Function()? selectedPokemon,
+    String? selectedType,
+    Map<int, String>? nicknames,
+    Set<int>? favorites,
+    bool? isFavoritesPanelExpanded,
+  }) {
+    return PokemonState(
+      status: status ?? this.status,
+      pokemonList: pokemonList ?? this.pokemonList,
+      errorMessage: errorMessage ?? this.errorMessage,
+      selectedPokemon:
+          selectedPokemon != null ? selectedPokemon() : this.selectedPokemon,
+      selectedType: selectedType ?? this.selectedType,
+      nicknames: nicknames ?? this.nicknames,
+      favorites: favorites ?? this.favorites,
+      isFavoritesPanelExpanded:
+          isFavoritesPanelExpanded ?? this.isFavoritesPanelExpanded,
+    );
+  }
+}
+
+final pokeApiServiceProvider = Provider<PokeApiService>((ref) {
+  return PokeApiService();
+});
+
+class PokemonNotifier extends Notifier<PokemonState> {
+  late final PokeApiService _apiService;
+
+  @override
+  PokemonState build() {
+    _apiService = ref.watch(pokeApiServiceProvider);
+    return const PokemonState();
+  }
+
+  Future<void> fetchPokemon({
+    bool showLoading = true,
+    bool clearData = true,
+  }) async {
     if (showLoading) {
-      _state = PokemonState.loading;
-      _errorMessage = '';
-      if (clearData) {
-        _pokemonList = [];
-      }
-      notifyListeners();
+      state = state.copyWith(
+        status: PokemonStatus.loading,
+        errorMessage: '',
+        pokemonList: clearData ? const [] : state.pokemonList,
+      );
     }
 
     try {
       final results = await _apiService.fetchPokemonList(limit: 30);
-      _pokemonList = results;
-      _state = PokemonState.success;
-      _errorMessage = '';
+      state = state.copyWith(
+        status: PokemonStatus.success,
+        pokemonList: results,
+        errorMessage: '',
+      );
     } catch (e) {
-      _errorMessage = e.toString().replaceFirst('Exception: ', '');
-      _state = PokemonState.error;
-    } finally {
-      notifyListeners();
+      state = state.copyWith(
+        status: PokemonStatus.error,
+        errorMessage: e.toString().replaceFirst('Exception: ', ''),
+      );
     }
   }
 
-  /// Refresh method that re-triggers the PokéAPI call on the main page.
-  Future<void> refreshPokemon() async {
-    await fetchPokemon(showLoading: true, clearData: true);
+  void setNickname(int pokemonId, String nickname) {
+    final updated = Map<int, String>.from(state.nicknames);
+    final trimmed = nickname.trim();
+    if (trimmed.isEmpty) {
+      updated.remove(pokemonId);
+    } else {
+      updated[pokemonId] = trimmed;
+    }
+    state = state.copyWith(nicknames: updated);
   }
 
-  /// Sets the currently active Pokémon for the detail screen.
+  void removeNickname(int pokemonId) {
+    if (state.nicknames.containsKey(pokemonId)) {
+      final updated = Map<int, String>.from(state.nicknames)..remove(pokemonId);
+      state = state.copyWith(nicknames: updated);
+    }
+  }
+
+  void toggleFavorite(int pokemonId) {
+    final updated = Set<int>.from(state.favorites);
+    if (updated.contains(pokemonId)) {
+      updated.remove(pokemonId);
+    } else {
+      updated.add(pokemonId);
+    }
+    state = state.copyWith(favorites: updated);
+  }
+
+  void toggleFavoritesPanel() {
+    state = state.copyWith(
+      isFavoritesPanelExpanded: !state.isFavoritesPanelExpanded,
+    );
+  }
+
+  void setFavoritesPanelExpanded(bool expanded) {
+    state = state.copyWith(isFavoritesPanelExpanded: expanded);
+  }
+
+  void setTypeFilter(String type) {
+    state = state.copyWith(selectedType: type);
+  }
+
+  void clearTypeFilter() {
+    state = state.copyWith(selectedType: 'ALL');
+  }
+
   void selectPokemon(Pokemon pokemon) {
-    _selectedPokemon = pokemon;
-    notifyListeners();
+    state = state.copyWith(selectedPokemon: () => pokemon);
   }
 
-  /// Clears the selected Pokémon.
   void clearSelectedPokemon() {
-    _selectedPokemon = null;
-    notifyListeners();
-  }
-
-  /// Updates the type filter in App State.
-  void setFilterType(String type) {
-    _selectedType = type;
-    notifyListeners();
+    state = state.copyWith(selectedPokemon: () => null);
   }
 }
+
+final pokemonProvider =
+    NotifierProvider<PokemonNotifier, PokemonState>(PokemonNotifier.new);

@@ -1,42 +1,36 @@
 import 'package:flutter/material.dart';
-import 'package:provider/provider.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../models/pokemon.dart';
 import '../providers/pokemon_provider.dart';
 import '../providers/theme_provider.dart';
 import '../theme/app_colors.dart';
 import '../theme/app_text_styles.dart';
+import '../widgets/nickname_editor_dialog.dart';
 import '../widgets/retro_decorations.dart';
 
-/// Individual Pokémon Detail Page.
-///
-/// Complies with:
-/// 8. All UI values must come from APP STATE (not ephemeral).
-/// 9. Page contents (name, image, and ID) come directly from the Provider.
-class PokemonDetailScreen extends StatelessWidget {
+class PokemonDetailScreen extends ConsumerWidget {
   const PokemonDetailScreen({super.key});
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final scaffoldBg = AppColors.scaffoldBg(isDark);
     final scanlineColor = AppColors.scanline(isDark);
 
-    // Data sourced from App State via Provider
-    final pokemonProvider = Provider.of<PokemonProvider>(context);
-    final Pokemon? pokemon = pokemonProvider.selectedPokemon;
+    final Pokemon? pokemon =
+        ref.watch(pokemonProvider.select((s) => s.selectedPokemon));
 
     return Scaffold(
       backgroundColor: scaffoldBg,
       appBar: PreferredSize(
         preferredSize: const Size.fromHeight(48),
         child: SafeArea(
-          child: _buildRetroAppBar(context, isDark, pokemon),
+          child: _buildRetroAppBar(context, ref, isDark, pokemon),
         ),
       ),
       body: Stack(
         children: [
-          // CRT / GBA Scanline overlay
           Positioned.fill(
             child: CustomPaint(
               painter: ScanlinePainter(
@@ -46,10 +40,9 @@ class PokemonDetailScreen extends StatelessWidget {
             ),
           ),
 
-          // Main Detail Contents
           pokemon == null
               ? _buildNoPokemonView(context)
-              : _buildPokemonDetailView(context, isDark, pokemon),
+              : _buildPokemonDetailView(context, ref, isDark, pokemon),
         ],
       ),
     );
@@ -57,12 +50,17 @@ class PokemonDetailScreen extends StatelessWidget {
 
   Widget _buildRetroAppBar(
     BuildContext context,
+    WidgetRef ref,
     bool isDark,
     Pokemon? pokemon,
   ) {
     final headerBg = AppColors.headerBg(isDark);
     final tabBg = AppColors.headerTabBg(isDark);
     final borderCol = AppColors.headerBorder(isDark);
+
+    final isFav = pokemon != null
+        ? ref.watch(pokemonProvider.select((s) => s.isFavorite(pokemon.id)))
+        : false;
 
     return Container(
       height: 48,
@@ -72,7 +70,6 @@ class PokemonDetailScreen extends StatelessWidget {
       ),
       child: Row(
         children: [
-          // Back button styled as retro GBA tab
           InkWell(
             onTap: () => Navigator.of(context).pop(),
             child: Container(
@@ -104,7 +101,6 @@ class PokemonDetailScreen extends StatelessWidget {
 
           const SizedBox(width: 12),
 
-          // Title
           Expanded(
             child: Text(
               pokemon != null
@@ -121,12 +117,63 @@ class PokemonDetailScreen extends StatelessWidget {
             ),
           ),
 
-          // Theme toggle button
+          if (pokemon != null)
+            Padding(
+              padding: const EdgeInsets.only(right: 6.0),
+              child: Tooltip(
+                message: isFav ? 'Remove from Favorites' : 'Add to Favorites',
+                child: InkWell(
+                  borderRadius: BorderRadius.circular(20),
+                  onTap: () => ref
+                      .read(pokemonProvider.notifier)
+                      .toggleFavorite(pokemon.id),
+                  child: Container(
+                    padding: const EdgeInsets.all(7),
+                    decoration: BoxDecoration(
+                      color: isDark
+                          ? const Color(0xFF0F1522)
+                          : const Color(0xFF00587C),
+                      shape: BoxShape.circle,
+                      border: Border.all(
+                        color: isFav
+                            ? const Color(0xFFEF4444)
+                            : (isDark
+                                ? AppColors.retroGoldGlow
+                                : const Color(0xFF80D8FF)),
+                        width: 1.5,
+                      ),
+                      boxShadow: [
+                        BoxShadow(
+                          color: (isFav
+                                  ? const Color(0xFFEF4444)
+                                  : (isDark
+                                      ? AppColors.retroGoldGlow
+                                      : const Color(0xFF80D8FF)))
+                              .withValues(alpha: 0.35),
+                          blurRadius: 4,
+                          offset: const Offset(0, 1),
+                        ),
+                      ],
+                    ),
+                    child: Icon(
+                      isFav ? Icons.favorite : Icons.favorite_border,
+                      color: isFav
+                          ? const Color(0xFFEF4444)
+                          : (isDark
+                              ? AppColors.retroGoldGlow
+                              : const Color(0xFFE0F2FE)),
+                      size: 18,
+                    ),
+                  ),
+                ),
+              ),
+            ),
+
           Padding(
             padding: const EdgeInsets.only(right: 8.0),
             child: InkWell(
               borderRadius: BorderRadius.circular(20),
-              onTap: () => context.read<ThemeProvider>().toggleTheme(),
+              onTap: () => ref.read(themeProvider.notifier).toggleTheme(),
               child: Container(
                 padding: const EdgeInsets.all(7),
                 decoration: BoxDecoration(
@@ -158,6 +205,7 @@ class PokemonDetailScreen extends StatelessWidget {
 
   Widget _buildPokemonDetailView(
     BuildContext context,
+    WidgetRef ref,
     bool isDark,
     Pokemon pokemon,
   ) {
@@ -165,6 +213,13 @@ class PokemonDetailScreen extends StatelessWidget {
     final photoBoxBorder = AppColors.photoBoxBorder(isDark);
     final cardBg = AppColors.cardBg(isDark);
     final cardBorder = AppColors.cardBorder(isDark);
+
+    final isFav = ref.watch(
+      pokemonProvider.select((s) => s.isFavorite(pokemon.id)),
+    );
+    final nickname = ref.watch(
+      pokemonProvider.select((s) => s.getNickname(pokemon.id)),
+    );
 
     return Center(
       child: SingleChildScrollView(
@@ -175,24 +230,27 @@ class PokemonDetailScreen extends StatelessWidget {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              // Main Pokémon Card (ID, Image, Name, Type)
               Container(
                 decoration: BoxDecoration(
                   color: cardBg,
                   borderRadius: BorderRadius.circular(14),
-                  border: Border.all(color: cardBorder, width: 2.5),
-                  boxShadow: const [
+                  border: Border.all(
+                    color: isFav ? const Color(0xFFEF4444) : cardBorder,
+                    width: 2.5,
+                  ),
+                  boxShadow: [
                     BoxShadow(
-                      color: Color(0x38000000),
-                      offset: Offset(3, 5),
-                      blurRadius: 0,
+                      color: isFav
+                          ? const Color(0x3DEF4444)
+                          : const Color(0x38000000),
+                      offset: const Offset(3, 5),
+                      blurRadius: isFav ? 6 : 0,
                     ),
                   ],
                 ),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
-                    // Top Bar with ID & Gender
                     Container(
                       padding: const EdgeInsets.symmetric(
                         horizontal: 14,
@@ -224,6 +282,20 @@ class PokemonDetailScreen extends StatelessWidget {
                             ),
                           ),
                           const Spacer(),
+                          GestureDetector(
+                            behavior: HitTestBehavior.opaque,
+                            onTap: () => ref
+                                .read(pokemonProvider.notifier)
+                                .toggleFavorite(pokemon.id),
+                            child: Icon(
+                              isFav ? Icons.favorite : Icons.favorite_border,
+                              color: isFav
+                                  ? const Color(0xFFEF4444)
+                                  : const Color(0xFF9EA8BA),
+                              size: 18,
+                            ),
+                          ),
+                          const SizedBox(width: 8),
                           Text(
                             pokemon.hashId,
                             style: const TextStyle(
@@ -244,7 +316,6 @@ class PokemonDetailScreen extends StatelessWidget {
                       ),
                     ),
 
-                    // Pokémon Image Display Box
                     Container(
                       height: 240,
                       margin: const EdgeInsets.all(12),
@@ -256,17 +327,16 @@ class PokemonDetailScreen extends StatelessWidget {
                       child: Stack(
                         alignment: Alignment.center,
                         children: [
-                          // Subtle Watermark Pokéball
                           Opacity(
                             opacity: isDark ? 0.08 : 0.12,
                             child: const PokeballWidget(size: 180),
                           ),
 
-                          // Official Artwork Image
                           Image.network(
                             pokemon.imageUrl,
                             fit: BoxFit.contain,
-                            loadingBuilder: (context, child, loadingProgress) {
+                            loadingBuilder:
+                                (context, child, loadingProgress) {
                               if (loadingProgress == null) return child;
                               return Center(
                                 child: CircularProgressIndicator(
@@ -306,7 +376,6 @@ class PokemonDetailScreen extends StatelessWidget {
                       ),
                     ),
 
-                    // Pokémon Name & Type Badges Section
                     Container(
                       padding: const EdgeInsets.symmetric(
                         horizontal: 16,
@@ -326,16 +395,48 @@ class PokemonDetailScreen extends StatelessWidget {
                       ),
                       child: Column(
                         children: [
-                          Text(
-                            pokemon.displayName,
-                            style: const TextStyle(
-                              fontFamily: 'monospace',
-                              fontWeight: FontWeight.w900,
-                              fontSize: 20,
-                              letterSpacing: 1.2,
+                          if (nickname != null && nickname.isNotEmpty) ...[
+                            Text(
+                              '“$nickname”',
+                              style: TextStyle(
+                                fontFamily: 'monospace',
+                                fontWeight: FontWeight.w900,
+                                fontSize: 22,
+                                letterSpacing: 1.2,
+                                color: isDark
+                                    ? const Color(0xFF38BDF8)
+                                    : const Color(0xFF0284C7),
+                              ),
+                              textAlign: TextAlign.center,
                             ),
-                          ),
+                            const SizedBox(height: 3),
+                            Text(
+                              'SPECIES: ${pokemon.retroName}',
+                              style: TextStyle(
+                                fontFamily: 'monospace',
+                                fontWeight: FontWeight.w700,
+                                fontSize: 12,
+                                letterSpacing: 0.8,
+                                color: isDark
+                                    ? const Color(0xFF9EA8BA)
+                                    : const Color(0xFF64748B),
+                              ),
+                            ),
+                          ] else ...[
+                            Text(
+                              pokemon.retroName,
+                              style: TextStyle(
+                                fontFamily: 'monospace',
+                                fontWeight: FontWeight.w900,
+                                fontSize: 20,
+                                letterSpacing: 1.2,
+                                color: isDark ? Colors.white : const Color(0xFF0F172A),
+                              ),
+                            ),
+                          ],
+
                           const SizedBox(height: 8),
+
                           Row(
                             mainAxisAlignment: MainAxisAlignment.center,
                             children: [
@@ -348,6 +449,69 @@ class PokemonDetailScreen extends StatelessWidget {
                               ],
                             ],
                           ),
+
+                          const SizedBox(height: 12),
+
+                          Center(
+                            child: Material(
+                              color: Colors.transparent,
+                              child: InkWell(
+                                onTap: () =>
+                                    NicknameEditorDialog.show(context, pokemon),
+                                borderRadius: BorderRadius.circular(6),
+                                child: Container(
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 14,
+                                    vertical: 8,
+                                  ),
+                                  decoration: BoxDecoration(
+                                    color: isDark
+                                        ? const Color(0xFF161B22)
+                                        : const Color(0xFF3B4860),
+                                    borderRadius: BorderRadius.circular(6),
+                                    border: Border.all(
+                                      color: isDark
+                                          ? const Color(0xFF38BDF8)
+                                          : const Color(0xFF1E2532),
+                                      width: 1.6,
+                                    ),
+                                    boxShadow: const [
+                                      BoxShadow(
+                                        color: Color(0x35000000),
+                                        offset: Offset(1.5, 2.5),
+                                        blurRadius: 0,
+                                      ),
+                                    ],
+                                  ),
+                                  child: Row(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      Icon(
+                                        Icons.edit_note_rounded,
+                                        size: 16,
+                                        color: isDark
+                                            ? const Color(0xFF38BDF8)
+                                            : const Color(0xFFE8E088),
+                                      ),
+                                      const SizedBox(width: 6),
+                                      Text(
+                                        'EDIT NICKNAME',
+                                        style: TextStyle(
+                                          fontFamily: 'monospace',
+                                          fontWeight: FontWeight.w900,
+                                          fontSize: 11,
+                                          letterSpacing: 0.8,
+                                          color: isDark
+                                              ? const Color(0xFF38BDF8)
+                                              : const Color(0xFFE8E088),
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ),
                         ],
                       ),
                     ),
@@ -357,7 +521,6 @@ class PokemonDetailScreen extends StatelessWidget {
 
               const SizedBox(height: 14),
 
-              // Clean Stats Dialogue Box (HP Gauge Bar & Summary)
               RetroDialogueBox(
                 padding: const EdgeInsets.symmetric(
                   horizontal: 14,
@@ -365,10 +528,9 @@ class PokemonDetailScreen extends StatelessWidget {
                 ),
                 child: Column(
                   children: [
-                    // HP Gauge Row
                     Row(
                       children: [
-                        Text(
+                        const Text(
                           'HP',
                           style: AppTextStyles.hpLabel,
                         ),
@@ -404,7 +566,6 @@ class PokemonDetailScreen extends StatelessWidget {
                       ],
                     ),
                     const SizedBox(height: 8),
-                    // Clean Subtitle
                     Text(
                       'Kanto Pokédex Entry #${pokemon.id.toString().padLeft(3, '0')}',
                       style: TextStyle(

@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import '../theme/app_colors.dart';
 import '../theme/app_text_styles.dart';
 
-/// Custom painter for the nostalgic GBA / NDS horizontal scanlines.
 class ScanlinePainter extends CustomPainter {
   final Color scanlineColor;
   final double spacing;
@@ -29,8 +28,6 @@ class ScanlinePainter extends CustomPainter {
   }
 }
 
-/// A custom vector Pokéball widget drawn with authentic red/white halves,
-/// center band, and button, matching classic Game Boy and Nintendo DS party icons.
 class PokeballWidget extends StatelessWidget {
   final double size;
   final bool isOpened;
@@ -61,26 +58,22 @@ class _PokeballPainter extends CustomPainter {
 
     final rect = Rect.fromCircle(center: center, radius: radius);
 
-    // Top half (Pokéball red)
     final redPaint = Paint()
       ..color = AppColors.pokeballRed
       ..style = PaintingStyle.fill;
     canvas.drawArc(rect, 3.14159, 3.14159, true, redPaint);
 
-    // Bottom half (White)
     final whitePaint = Paint()
       ..color = AppColors.pokeballWhite
       ..style = PaintingStyle.fill;
     canvas.drawArc(rect, 0, 3.14159, true, whitePaint);
 
-    // Outer border
     final borderPaint = Paint()
       ..color = AppColors.pokeballBand
       ..style = PaintingStyle.stroke
       ..strokeWidth = size.width * 0.08;
     canvas.drawCircle(center, radius - (borderPaint.strokeWidth / 2), borderPaint);
 
-    // Horizontal center band
     final bandPaint = Paint()
       ..color = AppColors.pokeballBand
       ..style = PaintingStyle.fill;
@@ -94,13 +87,11 @@ class _PokeballPainter extends CustomPainter {
       bandPaint,
     );
 
-    // Center button outer ring
     final buttonOuterPaint = Paint()
       ..color = AppColors.pokeballBand
       ..style = PaintingStyle.fill;
     canvas.drawCircle(center, radius * 0.34, buttonOuterPaint);
 
-    // Center button inner white circle
     final buttonInnerPaint = Paint()
       ..color = Colors.white
       ..style = PaintingStyle.fill;
@@ -111,8 +102,6 @@ class _PokeballPainter extends CustomPainter {
   bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
 }
 
-/// Retro move/type badge styled identically to the GBA Summary Screen
-/// (e.g. WATER, ICE, NORMAL, DARK badges in the reference screenshot).
 class RetroTypeBadge extends StatelessWidget {
   final String typeName;
 
@@ -150,8 +139,6 @@ class RetroTypeBadge extends StatelessWidget {
   }
 }
 
-/// Classic Pokémon RPG dialogue box with double-line borders and corner rivets
-/// (as seen in the Nintendo DS "Choose a Pokémon." screenshot).
 class RetroDialogueBox extends StatelessWidget {
   final Widget child;
   final EdgeInsetsGeometry padding;
@@ -200,7 +187,6 @@ class RetroDialogueBox extends StatelessWidget {
         ),
         child: Stack(
           children: [
-            // Left corner screw rivet
             Positioned(
               left: 0,
               top: 0,
@@ -216,7 +202,6 @@ class RetroDialogueBox extends StatelessWidget {
                 ),
               ),
             ),
-            // Right corner screw rivet
             Positioned(
               right: 0,
               top: 0,
