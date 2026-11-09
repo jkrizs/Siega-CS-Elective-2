@@ -1,11 +1,14 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
-import '../models/product.dart';
+import 'package:provider/provider.dart';
+import '../state/product_provider.dart';
 import '../state/cart_state.dart';
 import '../theme/app_theme.dart';
 import '../widgets/editor_picks.dart';
 import '../widgets/field_notes.dart';
 import '../widgets/hero_banner.dart';
+import '../widgets/pagination_bar.dart';
+import '../widgets/price_range_filter.dart';
 import '../widgets/product_card.dart';
 import '../widgets/store_drawer.dart';
 import '../widgets/store_footer.dart';
@@ -49,6 +52,7 @@ class _HomeScreenState extends State<HomeScreen> {
     final screenWidth = MediaQuery.of(context).size.width;
     final isCompact = screenWidth < 900;
     final themeProvider = ThemeProvider.of(context);
+    final products = context.watch<ProductProvider>();
     final theme = Theme.of(context);
 
     return Scaffold(
@@ -119,44 +123,19 @@ class _HomeScreenState extends State<HomeScreen> {
                               ),
                             ),
                             Text(
-                              '${mockProducts.length} styles',
+                              '${products.totalCount} styles',
                               style: theme.textTheme.bodySmall?.copyWith(
                                 color: theme.colorScheme.onSurfaceVariant,
                               ),
                             ),
                           ],
                         ),
+                        const SizedBox(height: 12),
+                        _buildCategoryChips(context, products),
+                        const SizedBox(height: 12),
+                        const PriceRangeFilter(),
                         const SizedBox(height: 16),
-                        LayoutBuilder(
-                          builder: (context, constraints) {
-                            final isTablet = constraints.maxWidth >= 600;
-                            final isDesktop = constraints.maxWidth >= 960;
-                            final crossAxisCount = isDesktop
-                                ? 4
-                                : (isTablet ? 3 : 2);
-
-                            return GridView.builder(
-                              itemCount: mockProducts.length,
-                              shrinkWrap: true,
-                              physics: const NeverScrollableScrollPhysics(),
-                              gridDelegate:
-                                  SliverGridDelegateWithFixedCrossAxisCount(
-                                crossAxisCount: crossAxisCount,
-                                crossAxisSpacing: 14,
-                                mainAxisSpacing: 14,
-                                childAspectRatio: 0.63,
-                              ),
-                              itemBuilder: (context, index) {
-                                final product = mockProducts[index];
-                                return ProductCard(
-                                  product: product,
-                                  onTap: () =>
-                                      context.go('/product/${product.id}'),
-                                );
-                              },
-                            );
-                          },
-                        ),
+                        _buildProductArea(context, products),
                       ],
                     ),
                   ),
@@ -172,6 +151,157 @@ class _HomeScreenState extends State<HomeScreen> {
                 ],
               ),
             ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildCategoryChips(BuildContext context, ProductProvider products) {
+    final colors = Theme.of(context).colorScheme;
+    return Wrap(
+      spacing: 8,
+      runSpacing: 8,
+      children: [
+        for (final category in [
+          ProductProvider.allCategories,
+          ...products.categories,
+        ])
+          FilterChip(
+            label: Text(category),
+            selected: products.selectedCategory == category,
+            onSelected: (_) => products.selectCategory(category),
+            showCheckmark: false,
+            selectedColor: colors.primary,
+            labelStyle: TextStyle(
+              fontWeight: FontWeight.w600,
+              color: products.selectedCategory == category
+                  ? colors.onPrimary
+                  : colors.onSurface,
+            ),
+            shape: const StadiumBorder(),
+          ),
+      ],
+    );
+  }
+
+  Widget _buildProductArea(BuildContext context, ProductProvider products) {
+    final theme = Theme.of(context);
+
+    if (!products.hasLoaded && products.isLoading) {
+      return const SizedBox(
+        height: 240,
+        child: Center(child: CircularProgressIndicator()),
+      );
+    }
+
+    if (products.errorMessage != null) {
+      return _MessageView(
+        icon: Icons.cloud_off_rounded,
+        title: 'Could not load products',
+        message: products.errorMessage!,
+        actionLabel: 'Try again',
+        onAction: products.retry,
+      );
+    }
+
+    if (products.products.isEmpty) {
+      return _MessageView(
+        icon: Icons.search_off_rounded,
+        title: 'No products found',
+        message: 'Nothing matches this category and price range.',
+        actionLabel: products.isPriceFiltered ? 'Reset price range' : null,
+        onAction: products.isPriceFiltered ? products.resetPriceRange : null,
+      );
+    }
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          'Showing ${products.firstItemNumber}–${products.lastItemNumber} '
+          'of ${products.totalCount} products',
+          style: theme.textTheme.bodySmall?.copyWith(
+            color: theme.colorScheme.onSurfaceVariant,
+          ),
+        ),
+        const SizedBox(height: 6),
+        SizedBox(
+          height: 3,
+          child: products.isLoading ? const LinearProgressIndicator() : null,
+        ),
+        const SizedBox(height: 8),
+        AnimatedOpacity(
+          opacity: products.isLoading ? 0.5 : 1,
+          duration: const Duration(milliseconds: 150),
+          child: LayoutBuilder(
+            builder: (context, constraints) {
+              final isTablet = constraints.maxWidth >= 600;
+              final isDesktop = constraints.maxWidth >= 960;
+              final crossAxisCount = isDesktop ? 4 : (isTablet ? 3 : 2);
+
+              return GridView.builder(
+                itemCount: products.products.length,
+                shrinkWrap: true,
+                physics: const NeverScrollableScrollPhysics(),
+                gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                  crossAxisCount: crossAxisCount,
+                  crossAxisSpacing: 14,
+                  mainAxisSpacing: 14,
+                  childAspectRatio: 0.63,
+                ),
+                itemBuilder: (context, index) {
+                  final product = products.products[index];
+                  return ProductCard(
+                    key: ValueKey(product.id),
+                    product: product,
+                    onTap: () =>
+                        context.go('/product/${product.id}', extra: product),
+                  );
+                },
+              );
+            },
+          ),
+        ),
+        const SizedBox(height: 20),
+        const Center(child: PaginationBar()),
+      ],
+    );
+  }
+}
+
+class _MessageView extends StatelessWidget {
+  const _MessageView({
+    required this.icon,
+    required this.title,
+    required this.message,
+    this.actionLabel,
+    this.onAction,
+  });
+
+  final IconData icon;
+  final String title;
+  final String message;
+  final String? actionLabel;
+  final VoidCallback? onAction;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 40),
+      child: Center(
+        child: Column(
+          children: [
+            Icon(icon, size: 48, color: theme.colorScheme.onSurfaceVariant),
+            const SizedBox(height: 12),
+            Text(title, style: theme.textTheme.titleMedium),
+            const SizedBox(height: 6),
+            Text(message, textAlign: TextAlign.center),
+            if (actionLabel != null && onAction != null) ...[
+              const SizedBox(height: 16),
+              OutlinedButton(onPressed: onAction, child: Text(actionLabel!)),
+            ],
           ],
         ),
       ),

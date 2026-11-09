@@ -3,6 +3,7 @@ import '../models/product.dart';
 import '../screens/cart_screen.dart';
 import '../screens/checkout_confirmation_screen.dart';
 import '../screens/home_screen.dart';
+import '../screens/product_detail_loader.dart';
 import '../screens/product_detail_screen.dart';
 
 class AppRouter {
@@ -16,12 +17,12 @@ class AppRouter {
           GoRoute(
             path: 'product/:id',
             builder: (context, state) {
-              final productId = state.pathParameters['id'];
-              final product = mockProducts.firstWhere(
-                (p) => p.id == productId,
-                orElse: () => mockProducts.first,
-              );
-              return ProductDetailScreen(product: product);
+              final productId = state.pathParameters['id']!;
+              final extra = state.extra;
+              if (extra is Product && extra.id == productId) {
+                return ProductDetailScreen(product: extra);
+              }
+              return ProductDetailLoader(productId: productId);
             },
           ),
           GoRoute(

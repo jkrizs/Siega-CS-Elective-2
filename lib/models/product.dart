@@ -22,11 +22,21 @@ class ProductColorOption {
 
   @override
   int get hashCode => Object.hash(name, color, imageUrl);
+
+  factory ProductColorOption.fromMap(Map<String, dynamic> map) {
+    final hex = (map['hex'] as String? ?? '9E9E9E').replaceAll('#', '');
+    return ProductColorOption(
+      name: map['name'] as String,
+      color: Color(int.parse('FF$hex', radix: 16)),
+      imageUrl: map['image_url'] as String? ?? '',
+    );
+  }
 }
 
 class Product {
   final String id;
   final String title;
+  final String category;
   final String size;
   final double price;
   final double rating;
@@ -40,6 +50,7 @@ class Product {
   const Product({
     required this.id,
     required this.title,
+    this.category = '',
     required this.size,
     required this.price,
     required this.rating,
@@ -49,6 +60,39 @@ class Product {
     this.description =
         'TempShield™ double-wall vacuum insulation keeps drinks cold up to 24 hours and hot up to 12. Durable pro-grade stainless steel construction ensures pure taste without flavor transfer.',
   });
+
+  factory Product.fromMap(Map<String, dynamic> map) {
+    final colorRows = (map['product_colors'] as List<dynamic>? ?? [])
+        .cast<Map<String, dynamic>>()
+        .toList()
+      ..sort(
+        (a, b) => ((a['position'] as num?) ?? 0).compareTo(
+          (b['position'] as num?) ?? 0,
+        ),
+      );
+    final description = map['description'] as String?;
+
+    return Product(
+      id: map['id'] as String,
+      title: map['title'] as String,
+      category: map['category'] as String? ?? '',
+      size: map['size'] as String? ?? '',
+      price: _toDouble(map['price']),
+      rating: _toDouble(map['rating']),
+      badge: map['badge'] as String? ?? '',
+      imageUrl: map['image_url'] as String? ?? '',
+      colors: colorRows.map(ProductColorOption.fromMap).toList(),
+      description: description == null || description.isEmpty
+          ? 'TempShield™ double-wall vacuum insulation keeps drinks cold up to 24 hours and hot up to 12. Durable pro-grade stainless steel construction ensures pure taste without flavor transfer.'
+          : description,
+    );
+  }
+
+  static double _toDouble(Object? value) {
+    if (value is num) return value.toDouble();
+    if (value is String) return double.tryParse(value) ?? 0;
+    return 0;
+  }
 }
 
 class CartItem {
@@ -66,164 +110,3 @@ class CartItem {
 
   double get subtotal => product.price * quantity;
 }
-
-final List<Product> mockProducts = [
-  const Product(
-    id: '1',
-    title: 'Standard Mouth',
-    size: '21 oz',
-    price: 34.95,
-    rating: 4.8,
-    badge: 'NEW',
-    imageUrl: 'assets/products/standard_carnation.png',
-    colors: [
-      ProductColorOption(
-        name: 'Carnation',
-        color: Color(0xFFDFACB4),
-        imageUrl: 'assets/products/standard_carnation.png',
-      ),
-      ProductColorOption(
-        name: 'Indigo',
-        color: Color(0xFF1E365D),
-        imageUrl: 'assets/products/standard_indigo.png',
-      ),
-      ProductColorOption(
-        name: 'White',
-        color: Color(0xFFF0F0F0),
-        imageUrl: 'assets/products/standard_white.png',
-      ),
-    ],
-    description:
-        'The ideal companion for everyday hydration. Standard mouth opening fits most backcountry water filters and fits easily in standard car cup holders.',
-  ),
-  const Product(
-    id: '2',
-    title: 'Wide Mouth',
-    size: '32 oz',
-    price: 44.95,
-    rating: 4.9,
-    badge: 'BEST SELLER',
-    imageUrl: 'assets/products/wide_indigo.png',
-    colors: [
-      ProductColorOption(
-        name: 'Indigo',
-        color: Color(0xFF1E365D),
-        imageUrl: 'assets/products/wide_indigo.png',
-      ),
-      ProductColorOption(
-        name: 'Black',
-        color: Color(0xFF222222),
-        imageUrl: 'assets/products/wide_black.png',
-      ),
-      ProductColorOption(
-        name: 'Clementine',
-        color: Color(0xFFF0753F),
-        imageUrl: 'assets/products/wide_clementine.png',
-      ),
-    ],
-    description:
-        'Our largest everyday hydration bottle. Wide mouth opening allows quick filling, ice insertion, and easy cleaning.',
-  ),
-  const Product(
-    id: '3',
-    title: 'Flex Straw Cap',
-    size: '24 oz',
-    price: 39.95,
-    rating: 4.7,
-    badge: 'LEAKPROOF',
-    imageUrl: 'assets/products/straw_pink.png',
-    colors: [
-      ProductColorOption(
-        name: 'Carnation',
-        color: Color(0xFFDFACB4),
-        imageUrl: 'assets/products/straw_pink.png',
-      ),
-      ProductColorOption(
-        name: 'Spearmint',
-        color: Color(0xFF74C2A8),
-        imageUrl: 'assets/products/straw_spearmint.png',
-      ),
-      ProductColorOption(
-        name: 'Snapper',
-        color: Color(0xFF8B2B43),
-        imageUrl: 'assets/products/straw_snapper.png',
-      ),
-    ],
-    description:
-        'Sip anywhere with leakproof straw cap design. Keeps drinks icy cold with double-wall insulation while offering effortless hydration on the go.',
-  ),
-  const Product(
-    id: '4',
-    title: 'Coffee Flex Sip',
-    size: '20 oz',
-    price: 34.95,
-    rating: 4.6,
-    badge: 'HOT + COLD',
-    imageUrl: 'assets/products/coffee_olive.png',
-    colors: [
-      ProductColorOption(
-        name: 'Olive',
-        color: Color(0xFF76834F),
-        imageUrl: 'assets/products/coffee_olive.png',
-      ),
-      ProductColorOption(
-        name: 'Snapper',
-        color: Color(0xFF813647),
-        imageUrl: 'assets/products/coffee_snapper.png',
-      ),
-    ],
-    description:
-        'Engineered for hot beverages. Fits under most coffee brewing systems and ensures leakproof travel so you can sip your favorite brew with confidence.',
-  ),
-  const Product(
-    id: '5',
-    title: 'All Around Tumbler',
-    size: '28 oz',
-    price: 32.95,
-    rating: 4.8,
-    badge: 'POPULAR',
-    imageUrl: 'assets/products/tumbler_pacific.png',
-    colors: [
-      ProductColorOption(
-        name: 'Pacific Blue',
-        color: Color(0xFF4C6988),
-        imageUrl: 'assets/products/tumbler_pacific.png',
-      ),
-      ProductColorOption(
-        name: 'Lupine',
-        color: Color(0xFF745DB0),
-        imageUrl: 'assets/products/tumbler_lupine.png',
-      ),
-      ProductColorOption(
-        name: 'Olive',
-        color: Color(0xFF748147),
-        imageUrl: 'assets/products/tumbler_olive.png',
-      ),
-    ],
-    description:
-        'From morning smoothie to evening mocktail, this tumbler keeps temperatures locked in for hours with splash-resistant press-in lid.',
-  ),
-  const Product(
-    id: '6',
-    title: 'Trail Series Lightweight',
-    size: '32 oz',
-    price: 49.95,
-    rating: 4.9,
-    badge: 'LIGHTWEIGHT',
-    imageUrl: 'assets/products/trail_obsidian.jpg',
-    colors: [
-      ProductColorOption(
-        name: 'Obsidian',
-        color: Color(0xFF5A4C40),
-        imageUrl: 'assets/products/trail_obsidian.jpg',
-      ),
-      ProductColorOption(
-        name: 'Cobalt',
-        color: Color(0xFF334CB8),
-        imageUrl: 'assets/products/trail_cobalt.jpg',
-      ),
-    ],
-    description:
-        '25% lighter than standard 32 oz bottles. Engineered for backcountry hikers and backpackers seeking ultralight hydration without sacrificing durability.',
-  ),
-];

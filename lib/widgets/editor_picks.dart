@@ -1,7 +1,8 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
-import '../models/product.dart';
+import 'package:provider/provider.dart';
+import '../state/product_provider.dart';
 import '../theme/app_theme.dart';
 
 class EditorPicksSection extends StatefulWidget {
@@ -22,7 +23,9 @@ class _EditorPicksSectionState extends State<EditorPicksSection> {
     _pageController = PageController(viewportFraction: 0.95);
     _autoScrollTimer = Timer.periodic(const Duration(seconds: 5), (timer) {
       if (!mounted || !_pageController.hasClients) return;
-      final nextPage = (_currentPage + 1) % 3;
+      final count = context.read<ProductProvider>().featured.length;
+      if (count < 2) return;
+      final nextPage = (_currentPage + 1) % count;
       _pageController.animateToPage(
         nextPage,
         duration: const Duration(milliseconds: 600),
@@ -41,7 +44,7 @@ class _EditorPicksSectionState extends State<EditorPicksSection> {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final featuredProducts = mockProducts.take(3).toList();
+    final featuredProducts = context.watch<ProductProvider>().featured;
 
     final screenWidth = MediaQuery.of(context).size.width;
     final isTablet = screenWidth >= 600;
@@ -85,7 +88,8 @@ class _EditorPicksSectionState extends State<EditorPicksSection> {
 
                   return InkWell(
                     borderRadius: BorderRadius.circular(16),
-                    onTap: () => context.go('/product/${product.id}'),
+                    onTap: () =>
+                        context.go('/product/${product.id}', extra: product),
                     child: Container(
                       margin: const EdgeInsets.symmetric(
                         horizontal: 8,
@@ -273,7 +277,7 @@ class _EditorPicksSectionState extends State<EditorPicksSection> {
         const SizedBox(height: 8),
         Row(
           mainAxisAlignment: MainAxisAlignment.center,
-          children: List.generate(3, (index) {
+          children: List.generate(featuredProducts.length, (index) {
             final isActive = _currentPage == index;
             return AnimatedContainer(
               duration: const Duration(milliseconds: 300),
