@@ -20,19 +20,3 @@ store's page and filter state in a `ProductProvider` (Provider / ChangeNotifier)
   colors are removed with it through `on delete cascade`.
 
 Every query follows the order filter → `.order()` → `.range()`.
-
-## Setup
-
-1. Create a project at [supabase.com](https://supabase.com).
-2. Open **SQL Editor → New query**, paste `supabase/products_schema.sql` and run it.
-   It creates both tables, turns on Row Level Security with SELECT, INSERT, UPDATE and
-   DELETE policies, and adds 14 products with their colors.
-3. Copy the **Project URL** and **publishable (anon) key** from
-   **Project Settings → API Keys** into `supabaseUrl` and `supabasePublishableKey` in
-   `lib/main.dart`. Never use the secret / `service_role` key in the app.
-4. Run:
-
-   ```bash
-   flutter pub get
-   flutter run
-   ```
