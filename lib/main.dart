@@ -1,9 +1,11 @@
 import 'package:flutter/material.dart';
+import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import 'router/app_router.dart';
 import 'state/product_provider.dart';
+import 'state/session_state.dart';
 import 'theme/app_theme.dart';
 
 const supabaseUrl = 'https://znnbrdixsvdwbcetztkw.supabase.co';
@@ -18,8 +20,13 @@ Future<void> main() async {
   );
 
   runApp(
-    ChangeNotifierProvider(
-      create: (_) => ProductProvider()..initialize(),
+    MultiProvider(
+      providers: [
+        ChangeNotifierProvider(create: (_) => SessionState()),
+        ChangeNotifierProvider(
+          create: (_) => ProductProvider()..initialize(),
+        ),
+      ],
       child: const HydroFlaskStoreApp(),
     ),
   );
@@ -36,6 +43,8 @@ class HydroFlaskStoreApp extends StatefulWidget {
 
 class _HydroFlaskStoreAppState extends State<HydroFlaskStoreApp> {
   ThemeMode _themeMode = ThemeMode.light;
+  late final GoRouter _router =
+      AppRouter.create(context.read<SessionState>());
 
   void _toggleTheme() {
     setState(() {
@@ -53,7 +62,7 @@ class _HydroFlaskStoreAppState extends State<HydroFlaskStoreApp> {
       child: MaterialApp.router(
         title: 'Hydro Flask',
         debugShowCheckedModeBanner: false,
-        routerConfig: AppRouter.router,
+        routerConfig: _router,
         themeMode: _themeMode,
         theme: AppTheme.lightTheme,
         darkTheme: AppTheme.darkTheme,

@@ -1,6 +1,6 @@
 # Hydro Flask Store – Flutter + Supabase
 
-CS Elective 2 · Supabase-Flutter Activity (branch `backend-filter-pagination`)
+CS Elective 2 · Supabase-Auth Activity (branch `backend-auth`)
 
 Products are stored in Supabase (PostgreSQL) in two related tables: `products`, and
 `product_colors`, which links to it with a foreign key. The app loads each product
@@ -35,4 +35,32 @@ Every query follows the order filter → `.order()` → `.range()`.
    ```bash
    flutter pub get
    flutter run
+   ```
+
+## Authentication (branch `backend-auth`)
+
+Customers must log in before they can shop. Sign-in is handled by Supabase Auth:
+
+- **Email and password** – `supabase.auth.signUp(...)` to register and
+  `supabase.auth.signInWithPassword(...)` to log in.
+- **GitHub (third-party provider)** – `supabase.auth.signInWithOAuth(OAuthProvider.github)`.
+- **Log out** – the account menu in the app bar calls `supabase.auth.signOut()`.
+
+`SessionState` (`lib/state/session_state.dart`) listens to
+`supabase.auth.onAuthStateChange`, and go_router's `redirect` sends anyone without a
+session to `/login`.
+
+### Auth setup
+
+1. On GitHub: **Settings → Developer settings → OAuth Apps → New OAuth App**.
+   - Homepage URL: `http://localhost:3000`
+   - Redirect / callback URL: `https://<project-ref>.supabase.co/auth/v1/callback`
+2. In Supabase: **Authentication → Sign In / Providers → GitHub**, enable it and paste
+   the Client ID and Client Secret.
+3. In **Authentication → URL Configuration**, set the Site URL to
+   `http://localhost:3000` and add `http://localhost:3000/**` to the Redirect URLs.
+4. Run the app on that port:
+
+   ```bash
+   flutter run -d chrome --web-port 3000
    ```

@@ -1,17 +1,68 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import 'package:provider/provider.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:siega_prelimexam/main.dart';
 import 'package:siega_prelimexam/models/product.dart';
 import 'package:siega_prelimexam/router/app_router.dart';
 import 'package:siega_prelimexam/screens/cart_screen.dart';
 import 'package:siega_prelimexam/screens/checkout_confirmation_screen.dart';
 import 'package:siega_prelimexam/screens/product_detail_screen.dart';
+import 'package:siega_prelimexam/services/auth_service.dart';
 import 'package:siega_prelimexam/services/product_service.dart';
 import 'package:siega_prelimexam/state/cart_state.dart';
 import 'package:siega_prelimexam/state/product_provider.dart';
+import 'package:siega_prelimexam/state/session_state.dart';
 import 'package:siega_prelimexam/widgets/product_card.dart';
+
+class FakeAuthService implements AuthService {
+  FakeAuthService({bool loggedIn = true})
+    : _account = loggedIn ? _githubUser : null;
+
+  static const _githubUser = AccountInfo(
+    displayName: 'jkrizs',
+    email: 'jk@example.com',
+    provider: 'github',
+  );
+
+  final _events = StreamController<void>.broadcast();
+  AccountInfo? _account;
+  int githubLogins = 0;
+
+  void _emit(AccountInfo? account) {
+    _account = account;
+    _events.add(null);
+  }
+
+  @override
+  AccountInfo? get currentAccount => _account;
+
+  @override
+  Stream<void> get authChanges => _events.stream;
+
+  @override
+  Future<void> signInWithEmail(String email, String password) async {
+    if (password != 'hydrate123') {
+      throw AuthException('Invalid login credentials');
+    }
+    _emit(AccountInfo(displayName: email, email: email, provider: 'email'));
+  }
+
+  @override
+  Future<bool> registerWithEmail(String email, String password) async => false;
+
+  @override
+  Future<void> signInWithGitHub() async {
+    githubLogins++;
+    _emit(_githubUser);
+  }
+
+  @override
+  Future<void> signOut() async => _emit(null);
+}
 
 class FakeProductService implements ProductService {
   FakeProductService(List<Product> products) : _products = [...products];
@@ -130,16 +181,25 @@ Finder _inGrid(String title) => find.descendant(
       matching: find.text(title),
     );
 
-Future<ProductProvider> _pumpStore(WidgetTester tester) async {
+Future<ProductProvider> _pumpStore(
+  WidgetTester tester, {
+  FakeAuthService? auth,
+}) async {
   final provider = ProductProvider(
     service: FakeProductService(_sampleProducts),
   );
   await tester.pumpWidget(
-    ChangeNotifierProvider.value(
-      value: provider..initialize(),
+    MultiProvider(
+      providers: [
+        ChangeNotifierProvider(
+          create: (_) => SessionState(service: auth ?? FakeAuthService()),
+        ),
+        ChangeNotifierProvider.value(value: provider..initialize()),
+      ],
       child: const HydroFlaskStoreApp(),
     ),
   );
+  await tester.pumpAndSettle();
   AppRouter.router.go('/');
   await tester.pumpAndSettle();
   return provider;
@@ -374,6 +434,107 @@ void main() {
 
       expect(provider.products.first.id, '6');
       expect(provider.priceBounds!.min, 19);
+    });
+  });
+
+  group('Supabase auth', () {
+    Future<void> fillCredentials(
+      WidgetTester tester,
+      String email,
+      String password,
+    ) async {
+      await tester.enterText(find.byType(TextFormField).at(0), email);
+      await tester.enterText(find.byType(TextFormField).at(1), password);
+    }
+
+    testWidgets('logged-out users are sent to the login screen', (
+      tester,
+    ) async {
+      _useTallScreen(tester);
+      await _pumpStore(tester, auth: FakeAuthService(loggedIn: false));
+
+      expect(find.text('Log in to start shopping'), findsOneWidget);
+      expect(find.widgetWithText(OutlinedButton, 'GitHub'), findsOneWidget);
+      expect(find.byType(ProductCard), findsNothing);
+    });
+
+    testWidgets('email login opens the store', (tester) async {
+      _useTallScreen(tester);
+      await _pumpStore(tester, auth: FakeAuthService(loggedIn: false));
+
+      await fillCredentials(tester, 'jk@example.com', 'hydrate123');
+      await _tapVisible(tester, find.widgetWithText(ElevatedButton, 'LOG IN'));
+
+      expect(find.text('Log in to start shopping'), findsNothing);
+      expect(find.byType(ProductCard), findsWidgets);
+    });
+
+    testWidgets('wrong password shows the Supabase error', (tester) async {
+      _useTallScreen(tester);
+      await _pumpStore(tester, auth: FakeAuthService(loggedIn: false));
+
+      await fillCredentials(tester, 'jk@example.com', 'nope12345');
+      await _tapVisible(tester, find.widgetWithText(ElevatedButton, 'LOG IN'));
+
+      expect(find.text('Invalid login credentials'), findsOneWidget);
+      expect(find.byType(ProductCard), findsNothing);
+    });
+
+    testWidgets('invalid email is caught before calling Supabase', (
+      tester,
+    ) async {
+      _useTallScreen(tester);
+      await _pumpStore(tester, auth: FakeAuthService(loggedIn: false));
+
+      await fillCredentials(tester, 'not-an-email', 'hydrate123');
+      await _tapVisible(tester, find.widgetWithText(ElevatedButton, 'LOG IN'));
+
+      expect(find.text('Please enter a valid email address'), findsOneWidget);
+    });
+
+    testWidgets('GitHub login opens the store', (tester) async {
+      _useTallScreen(tester);
+      final auth = FakeAuthService(loggedIn: false);
+      await _pumpStore(tester, auth: auth);
+
+      await _tapVisible(tester, find.widgetWithText(OutlinedButton, 'GitHub'));
+
+      expect(auth.githubLogins, 1);
+      expect(find.byType(ProductCard), findsWidgets);
+    });
+
+    testWidgets('register asks the user to confirm their email', (
+      tester,
+    ) async {
+      _useTallScreen(tester);
+      await _pumpStore(tester, auth: FakeAuthService(loggedIn: false));
+
+      await _tapVisible(tester, find.text('Register'));
+      await fillCredentials(tester, 'new@example.com', 'hydrate123');
+      await _tapVisible(
+        tester,
+        find.widgetWithText(ElevatedButton, 'CREATE ACCOUNT'),
+      );
+
+      expect(
+        find.textContaining('We sent a confirmation link to new@example.com'),
+        findsOneWidget,
+      );
+    });
+
+    testWidgets('account menu shows the user and logs out', (tester) async {
+      _useTallScreen(tester);
+      await _pumpStore(tester);
+
+      await tester.tap(find.byTooltip('My Account'));
+      await tester.pumpAndSettle();
+      expect(find.text('jkrizs'), findsOneWidget);
+      expect(find.text('Signed in with GitHub'), findsOneWidget);
+
+      await tester.tap(find.text('Log out'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Log in to start shopping'), findsOneWidget);
     });
   });
 }

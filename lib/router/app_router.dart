@@ -1,15 +1,30 @@
 import 'package:go_router/go_router.dart';
+
+import '../state/session_state.dart';
 import '../models/product.dart';
 import '../screens/cart_screen.dart';
 import '../screens/checkout_confirmation_screen.dart';
 import '../screens/home_screen.dart';
+import '../screens/login_screen.dart';
 import '../screens/product_detail_loader.dart';
 import '../screens/product_detail_screen.dart';
 
 class AppRouter {
-  static final GoRouter router = GoRouter(
+  static late GoRouter router;
+
+  static GoRouter create(SessionState session) => router = GoRouter(
     initialLocation: '/',
+    refreshListenable: session,
+    redirect: (context, state) {
+      final atLogin = state.matchedLocation == '/login';
+      if (!session.isLoggedIn) return atLogin ? null : '/login';
+      return atLogin ? '/' : null;
+    },
     routes: [
+      GoRoute(
+        path: '/login',
+        builder: (context, state) => const LoginScreen(),
+      ),
       GoRoute(
         path: '/',
         builder: (context, state) => const HomeScreen(),

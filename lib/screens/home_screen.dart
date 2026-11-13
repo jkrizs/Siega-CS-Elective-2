@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 import '../state/product_provider.dart';
+import '../state/session_state.dart';
 import '../state/cart_state.dart';
 import '../theme/app_theme.dart';
 import '../widgets/editor_picks.dart';
@@ -75,6 +76,7 @@ class _HomeScreenState extends State<HomeScreen> {
             onPressed: themeProvider?.toggleTheme,
             tooltip: 'Toggle Theme',
           ),
+          const _AccountMenu(),
           AnimatedBuilder(
             animation: cartState,
             builder: (context, _) => Badge(
@@ -305,6 +307,55 @@ class _MessageView extends StatelessWidget {
           ],
         ),
       ),
+    );
+  }
+}
+
+class _AccountMenu extends StatelessWidget {
+  const _AccountMenu();
+
+  @override
+  Widget build(BuildContext context) {
+    final session = context.watch<SessionState>();
+    final account = session.account;
+    final theme = Theme.of(context);
+
+    return PopupMenuButton<void>(
+      tooltip: 'My Account',
+      icon: const Icon(Icons.person_outline),
+      itemBuilder: (context) => [
+        PopupMenuItem<void>(
+          enabled: false,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                account?.displayName ?? '',
+                style: theme.textTheme.titleSmall?.copyWith(
+                  fontWeight: FontWeight.w800,
+                  color: theme.colorScheme.onSurface,
+                ),
+              ),
+              if (account?.provider != null)
+                Text(
+                  'Signed in with ${account!.provider == 'github' ? 'GitHub' : 'email'}',
+                  style: theme.textTheme.bodySmall,
+                ),
+            ],
+          ),
+        ),
+        const PopupMenuDivider(),
+        PopupMenuItem<void>(
+          onTap: session.logout,
+          child: const Row(
+            children: [
+              Icon(Icons.logout, size: 20),
+              SizedBox(width: 12),
+              Text('Log out'),
+            ],
+          ),
+        ),
+      ],
     );
   }
 }
